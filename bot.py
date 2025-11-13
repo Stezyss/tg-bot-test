@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = "7388791363:AAHz7TwqvJQerX8EUKwS-lIlFUMKNJW2UTI"
+#TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 AI_API_KEY = os.getenv("AI_API_KEY")
 
 # --- Простая PII-очистка ---
