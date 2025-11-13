@@ -1,17 +1,19 @@
-#11111111111111111111111
 # file: bot.py
 import os
 import re
 import logging
 import random
+from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-#
+
+# Загружаем переменные из .env файла
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TELEGRAM_TOKEN = "7388791363:AAHz7TwqvJQerX8EUKwS-lIlFUMKNJW2UTI"
-#TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 AI_API_KEY = os.getenv("AI_API_KEY")
 
 # --- Простая PII-очистка ---
@@ -24,6 +26,14 @@ main_keyboard = [
     [KeyboardButton("Напиши текст для поста ✍️"), KeyboardButton("Создай изображение для поста 🎨")]
 ]
 reply_markup = ReplyKeyboardMarkup(main_keyboard, resize_keyboard=True)
+
+# Простая настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Список случайных ответов когда команда не опознана
 random_responses = [
@@ -89,7 +99,7 @@ async def create_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['waiting_for'] = 'image_description'
     await update.message.reply_text("Опишите событие или проект (1-3 предложения) 🎨\nЯ сгенерирую изображение по теме 🖼", reply_markup=reply_markup)
 
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     text = update.message.text
     scrubbed, changes = scrub_pii(text)
@@ -159,12 +169,23 @@ async def process_command(update: Update, context: ContextTypes.DEFAULT_TYPE, te
         random_response = random.choice(random_responses)
         await update.message.reply_text(random_response, reply_markup=reply_markup)
 
-def main():
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на inline-кнопки"""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(text=f"Вы выбрали: {query.data}")
 
-    logger.info("Запуск бота... 🚀")
+def main():
+    print("Бот запускается...")
+    
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    
+    # Добавляем обработчики
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    
+    print("Бот работает и готов принимать сообщения")
     app.run_polling()
 
 if __name__ == "__main__":
