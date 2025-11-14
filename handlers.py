@@ -1,30 +1,30 @@
+# handlers.py
 import re
-import random
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from text_service import TextService
 from image_service import ImageService
 
 
+# НОВАЯ КЛАВИАТУРА ПО ВАШЕМУ ТЗ
 main_keyboard = ReplyKeyboardMarkup([
-    ["Собрать info о НКО", "Генерация текста"],
-    ["Генерация изображения", "Редактор текста"],
-    ["Контент-план"]
+    ["📝 Генерация текста", "🎨 Генерация изображения"],
+    ["✏️ Редактор текста", "📅 Контент-план"],
+    ["🔍 Предоставить информацию об НКО"]  # Большая кнопка на всю строку
 ], resize_keyboard=True)
 
 style_markup = InlineKeyboardMarkup([
-    [InlineKeyboardButton("Разговорный", callback_data="style_casual")],
-    [InlineKeyboardButton("Официальный", callback_data="style_formal")],
-    [InlineKeyboardButton("Художественный", callback_data="style_artistic")],
-    [InlineKeyboardButton("Без стиля", callback_data="style_skip")]
+    [InlineKeyboardButton("💬 Разговорный", callback_data="style_casual")],
+    [InlineKeyboardButton("🏢 Официальный", callback_data="style_formal")],
+    [InlineKeyboardButton("🎭 Художественный", callback_data="style_artistic")],
+    [InlineKeyboardButton("⚪ Без стиля", callback_data="style_skip")]
 ])
 
 def scrub_pii(text: str):
-    changes = []
     text = re.sub(r'\+\d[\d\s\-\(\)]{8,}', '[телефон]', text)
     text = re.sub(r'[\w\.-]+@[\w\.-]+', '[email]', text)
     text = re.sub(r'\b\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\b', '[координаты]', text)
-    return text, changes
+    return text, []
 
 
 class BotHandlers:
@@ -36,8 +36,8 @@ class BotHandlers:
         context.user_data.clear()
         context.user_data['nko_info'] = {}
         await update.message.reply_text(
-            "Привет! Я помогу создавать посты и картинки для НКО\n\n"
-            "Сначала можешь рассказать о своей организации (необязательно)",
+            "👋 Привет! Я помогу создавать посты и картинки для НКО\n\n"
+            "📋 Сначала можешь рассказать о своей организации (необязательно)",
             reply_markup=main_keyboard
         )
 
@@ -46,88 +46,94 @@ class BotHandlers:
         scrubbed, _ = scrub_pii(text)
         nko_info = context.user_data.get('nko_info', {})
 
-        # Сбор информации
-        if text == "Собрать info о НКО":
+        # ——— СБОР ИНФОРМАЦИИ О НКО ———
+        if text == "🔍 Предоставить информацию об НКО":
             context.user_data['state'] = 'nko_name'
-            await update.message.reply_text("Название НКО?")
+            await update.message.reply_text("🏷️ Название НКО?")
             return
 
         if context.user_data.get('state') == 'nko_name':
             nko_info['name'] = scrubbed
             context.user_data['state'] = 'nko_desc'
-            await update.message.reply_text("Краткое описание миссии?")
+            await update.message.reply_text("📄 Краткое описание миссии?")
             return
+
         if context.user_data.get('state') == 'nko_desc':
             nko_info['description'] = scrubbed
             context.user_data['state'] = 'nko_act'
-            await update.message.reply_text("Чем занимаетесь?")
+            await update.message.reply_text("🔄 Чем занимаетесь?")
             return
+
         if context.user_data.get('state') == 'nko_act':
             nko_info['activities'] = scrubbed
             context.user_data['nko_info'] = nko_info
             context.user_data['state'] = None
-            await update.message.reply_text("Информация сохранена! Теперь посты будут персональными", reply_markup=main_keyboard)
+            await update.message.reply_text(
+                "✅ Информация сохранена! Теперь посты будут персональными",
+                reply_markup=main_keyboard
+            )
             return
 
-        # Действия
-        if text == "Генерация текста":
+        # ——— ОСНОВНЫЕ ДЕЙСТВИЯ ———
+        if text == "📝 Генерация текста":
             context.user_data['waiting'] = 'text_prompt'
-            await update.message.reply_text("О чём пост? (идея в 1–2 предложения)")
+            await update.message.reply_text("💡 О чём пост? (идея в 1–2 предложения)")
             return
 
-        if text == "Генерация изображения":
+        if text == "🎨 Генерация изображения":
             context.user_data['waiting'] = 'image_prompt'
-            await update.message.reply_text("Опиши картинку:")
+            await update.message.reply_text("🎨 Опиши картинку:")
             return
 
-        if text == "Редактор текста":
+        if text == "✏️ Редактор текста":
             context.user_data['waiting'] = 'edit_text'
-            await update.message.reply_text("Пришли текст — я его улучшу")
+            await update.message.reply_text("📝 Пришли текст — я его улучшу")
             return
 
-        if text == "Контент-план":
+        if text == "📅 Контент-план":
             context.user_data['waiting'] = 'plan_period'
-            await update.message.reply_text("На какой период? (неделя / месяц)")
+            await update.message.reply_text("📆 На какой период? (неделя / месяц)")
             return
 
-        # Обработка ввода
+        # ——— ОБРАБОТКА ВВОДА ———
         if context.user_data.get('waiting') == 'text_prompt':
             context.user_data['last_prompt'] = scrubbed
-            await update.message.reply_text("Выбери стиль:", reply_markup=style_markup)
+            await update.message.reply_text("🎨 Выбери стиль:", reply_markup=style_markup)
             return
 
         if context.user_data.get('waiting') == 'image_prompt':
-            await update.message.reply_text("Генерирую...")
+            await update.message.reply_text("⏳ Генерирую...")
             img = await self.image_service.generate_image(scrubbed, nko_info)
             if img:
-                await update.message.reply_photo(img, caption="Готово!")
+                await update.message.reply_photo(img, caption="✅ Готово!")
             else:
-                await update.message.reply_text("Не получилось сгенерировать")
+                await update.message.reply_text("❌ Не получилось сгенерировать")
             context.user_data['waiting'] = None
-            await update.message.reply_text("Готово!", reply_markup=main_keyboard)
+            await update.message.reply_text("✅ Готово!", reply_markup=main_keyboard)
             return
 
         if context.user_data.get('waiting') == 'edit_text':
-            result = self.text_service.edit_text(scrubbed, nko_info)  # Синхронно
-            await update.message.reply_text(f"Улучшено:\n\n{result}", reply_markup=main_keyboard)
+            result = self.text_service.edit_text(scrubbed, nko_info)
+            await update.message.reply_text(f"✨ Улучшено:\n\n{result}", reply_markup=main_keyboard)
             context.user_data['waiting'] = None
             return
 
         if context.user_data.get('waiting') == 'plan_period':
             context.user_data['plan_period'] = scrubbed
             context.user_data['waiting'] = 'plan_freq'
-            await update.message.reply_text("Как часто публикуете?")
+            await update.message.reply_text("🔄 Как часто публикуете?")
             return
 
         if context.user_data.get('waiting') == 'plan_freq':
-            plan = self.text_service.generate_content_plan(  # Синхронно
+            plan = self.text_service.generate_content_plan(
                 context.user_data['plan_period'], scrubbed, nko_info
             )
-            await update.message.reply_text(f"Контент-план:\n\n{plan}", reply_markup=main_keyboard)
+            await update.message.reply_text(f"📋 Контент-план:\n\n{plan}", reply_markup=main_keyboard)
             context.user_data['waiting'] = None
             return
 
-        await update.message.reply_text("Выбери действие ниже", reply_markup=main_keyboard)
+        # Если ничего не подошло
+        await update.message.reply_text("👇 Выбери действие ниже", reply_markup=main_keyboard)
 
     async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -145,6 +151,6 @@ class BotHandlers:
             prompt = context.user_data.get('last_prompt', 'Сделай красивый пост для НКО')
             nko_info = context.user_data.get('nko_info', {})
 
-            await query.edit_message_text("Генерирую текст...")
-            result = self.text_service.generate_text(prompt, nko_info, style)  # Синхронно
-            await query.edit_message_text(f"Готово:\n\n{result}")
+            await query.edit_message_text("⏳ Генерирую текст...")
+            result = self.text_service.generate_text(prompt, nko_info, style)
+            await query.edit_message_text(f"✅ Готово:\n\n{result}")
