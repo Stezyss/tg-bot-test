@@ -1,12 +1,11 @@
 # main.py
 import asyncio
 import logging
-from telegram import Update  # ← ЭТОТ ИМПОРТ БЫЛ ПРОПУЩЕН!
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
     ContextTypes,
     filters
 )
@@ -58,14 +57,13 @@ def main():
 
     app.bot_data['text_service'] = text_service
 
-    # Обработчики
+    # Обработчики (удален CallbackQueryHandler, так как стили теперь reply buttons)
     app.add_handler(CommandHandler("start", handlers.start_command))
-    app.add_handler(CallbackQueryHandler(handlers.callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text_message))
     app.add_error_handler(error_handler)
 
     logger.info("Бот запущен с YandexGPT + YandexART!")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)  # Теперь Update импортирован!
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
