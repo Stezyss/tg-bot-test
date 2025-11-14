@@ -1,124 +1,150 @@
 import re
 import random
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from ai_service import AIService
+from text_service import TextService
 from image_service import ImageService
 
-phone_re = re.compile(r'(\+?\d[\d\s\-\(\)]{5,}\d)')
-email_re = re.compile(r'[\w\.-]+@[\w\.-]+')
-coord_re = re.compile(r'\b(\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\b')
 
-main_keyboard = [
-    [KeyboardButton("Напиши текст для поста ✍️"), KeyboardButton("Создай изображение для поста 🎨")]
-]
-reply_markup = ReplyKeyboardMarkup(main_keyboard, resize_keyboard=True)
+main_keyboard = ReplyKeyboardMarkup([
+    ["Собрать info о НКО", "Генерация текста"],
+    ["Генерация изображения", "Редактор текста"],
+    ["Контент-план"]
+], resize_keyboard=True)
 
-random_responses = [
-    "Эх, если бы я был поумнее... 🧠 А пока давай использовать кнопки!",
-    "Я в замешательстве 🫣 Лучше нажми на кнопку, я так точнее пойму",
-    "Кажется, ты открываешь во мне новые возможности... ⚡ Но пока только кнопки понимаю 🤖",
-    "Ой-ой, что-то пошло не так! 😅 Давай начнем с кнопок?",
-    "Мой искусственный интеллект в ступоре... 🤖💥 Выбери действие ниже!",
-    "Так-так, давай попробуем еще разок! 🔄 Используй кнопки, пожалуйста",
-    "Упс! Кажется, я не распознал команду 🚫 Давай попробуем с кнопок?",
-    "Ой, прости! 😇 Я немного запутался. Может, выберешь кнопку?",
-    "Мой мозг-процессор завис... ⏳ Лучше используй кнопки ниже!"
-]
+style_markup = InlineKeyboardMarkup([
+    [InlineKeyboardButton("Разговорный", callback_data="style_casual")],
+    [InlineKeyboardButton("Официальный", callback_data="style_formal")],
+    [InlineKeyboardButton("Художественный", callback_data="style_artistic")],
+    [InlineKeyboardButton("Без стиля", callback_data="style_skip")]
+])
 
-def scrub_pii(text: str) -> (str, list):
+def scrub_pii(text: str):
     changes = []
-    t = phone_re.sub("[контакт]", text)
-    if t != text:
-        changes.append("телефон/контакт удалён")
-    text = t
-    t = email_re.sub("[email]", text)
-    if t != text:
-        changes.append("email удалён")
-    text = t
-    t = coord_re.sub("[координаты]", text)
-    if t != text:
-        changes.append("координаты удалены")
+    text = re.sub(r'\+\d[\d\s\-\(\)]{8,}', '[телефон]', text)
+    text = re.sub(r'[\w\.-]+@[\w\.-]+', '[email]', text)
+    text = re.sub(r'\b\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\b', '[координаты]', text)
     return text, changes
 
+
 class BotHandlers:
-    def __init__(self, ai_service: AIService, image_service: ImageService):
-        self.ai_service = ai_service
+    def __init__(self, text_service: TextService, image_service: ImageService):
+        self.text_service = text_service
         self.image_service = image_service
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        text = """
-🚀 Быстрый старт:
+        context.user_data.clear()
+        context.user_data['nko_info'] = {}
+        await update.message.reply_text(
+            "Привет! Я помогу создавать посты и картинки для НКО\n\n"
+            "Сначала можешь рассказать о своей организации (необязательно)",
+            reply_markup=main_keyboard
+        )
 
-1. Нажми кнопку ✍️ или 🎨
-2. Опиши идею в 1-3 предложения  
-3. Получи готовый контент!
+    async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        text = update.message.text.strip()
+        scrubbed, _ = scrub_pii(text)
+        nko_info = context.user_data.get('nko_info', {})
 
-🔮 Я превращу твои мысли в крутые посты!
+        # Сбор информации
+        if text == "Собрать info о НКО":
+            context.user_data['state'] = 'nko_name'
+            await update.message.reply_text("Название НКО?")
+            return
 
-👇 Выбирай действие:
-        """
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        if context.user_data.get('state') == 'nko_name':
+            nko_info['name'] = scrubbed
+            context.user_data['state'] = 'nko_desc'
+            await update.message.reply_text("Краткое описание миссии?")
+            return
+        if context.user_data.get('state') == 'nko_desc':
+            nko_info['description'] = scrubbed
+            context.user_data['state'] = 'nko_act'
+            await update.message.reply_text("Чем занимаетесь?")
+            return
+        if context.user_data.get('state') == 'nko_act':
+            nko_info['activities'] = scrubbed
+            context.user_data['nko_info'] = nko_info
+            context.user_data['state'] = None
+            await update.message.reply_text("Информация сохранена! Теперь посты будут персональными", reply_markup=main_keyboard)
+            return
 
-    async def create_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        context.user_data['waiting_for'] = 'text_description'
-        await update.message.reply_text("Опишите событие или проект (1-3 предложения) 📝\nЯ сгенерирую варианты постов и оформление 🎯", reply_markup=reply_markup)
+        # Действия
+        if text == "Генерация текста":
+            context.user_data['waiting'] = 'text_prompt'
+            await update.message.reply_text("О чём пост? (идея в 1–2 предложения)")
+            return
 
-    async def create_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        context.user_data['waiting_for'] = 'image_description'
-        await update.message.reply_text("Опишите событие или проект (1-3 предложения) 🎨\nЯ сгенерирую изображение по теме 🖼", reply_markup=reply_markup)
+        if text == "Генерация изображения":
+            context.user_data['waiting'] = 'image_prompt'
+            await update.message.reply_text("Опиши картинку:")
+            return
 
-    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        text = update.message.text
-        scrubbed, changes = scrub_pii(text)
+        if text == "Редактор текста":
+            context.user_data['waiting'] = 'edit_text'
+            await update.message.reply_text("Пришли текст — я его улучшу")
+            return
 
-        waiting_for = context.user_data.get('waiting_for')
-        
-        if waiting_for == 'text_description':
-            if text not in ["Напиши текст для поста ✍️", "Создай изображение для поста 🎨"]:
-                await update.message.reply_text("✅ Понял! Обрабатываю запрос... ⏳")
-                context.user_data['waiting_for'] = None
-                
-                if changes:
-                    note = "🔒 Я убрал/заменил: " + ", ".join(changes) + ".\n\n"
-                else:
-                    note = ""
-                
-                prompt = (f"Описание: {scrubbed}\n"
-                          "Задача: предложи 3 варианта поста для соцсетей: короткий, средний, длинный. "
-                          "Каждый вариант — заголовок (5-7 слов), текст, 3 хештега, CTA. Не используй точные локации. "
-                          "Также предложи 2 варианта визуального оформления (фото/инфографика) по 3 пункта каждый.")
-                ai_response = self.ai_service.generate_text(prompt)
-                reply = note + "🎉 Вот что я подготовил:\n\n" + ai_response
-                
-                if len(reply) > 4000:
-                    for i in range(0, len(reply), 3500):
-                        await update.message.reply_text(reply[i:i+3500])
-                else:
-                    await update.message.reply_text(reply)
+        if text == "Контент-план":
+            context.user_data['waiting'] = 'plan_period'
+            await update.message.reply_text("На какой период? (неделя / месяц)")
+            return
+
+        # Обработка ввода
+        if context.user_data.get('waiting') == 'text_prompt':
+            context.user_data['last_prompt'] = scrubbed
+            await update.message.reply_text("Выбери стиль:", reply_markup=style_markup)
+            return
+
+        if context.user_data.get('waiting') == 'image_prompt':
+            await update.message.reply_text("Генерирую...")
+            img = await self.image_service.generate_image(scrubbed, nko_info)
+            if img:
+                await update.message.reply_photo(img, caption="Готово!")
             else:
-                context.user_data['waiting_for'] = None
-                await self.process_command(update, context, text)
-        
-        elif waiting_for == 'image_description':
-            if text not in ["Напиши текст для поста ✍️", "Создай изображение для поста 🎨"]:
-                await update.message.reply_text("✅ Понял! Готовлю изображение... 🎨")
-                context.user_data['waiting_for'] = None
-                
-                await update.message.reply_text(f"🖼️ Получил описание для изображения: {scrubbed}")
-                # Заглушка для генерации изображения
-            else:
-                context.user_data['waiting_for'] = None
-                await self.process_command(update, context, text)
-        
-        else:
-            await self.process_command(update, context, text)
+                await update.message.reply_text("Не получилось сгенерировать")
+            context.user_data['waiting'] = None
+            await update.message.reply_text("Готово!", reply_markup=main_keyboard)
+            return
 
-    async def process_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-        if text == "Напиши текст для поста ✍️":
-            await self.create_text(update, context)
-        elif text == "Создай изображение для поста 🎨":
-            await self.create_image(update, context)
-        else:
-            random_response = random.choice(random_responses)
-            await update.message.reply_text(random_response, reply_markup=reply_markup)
+        if context.user_data.get('waiting') == 'edit_text':
+            result = self.text_service.edit_text(scrubbed, nko_info)  # Синхронно
+            await update.message.reply_text(f"Улучшено:\n\n{result}", reply_markup=main_keyboard)
+            context.user_data['waiting'] = None
+            return
+
+        if context.user_data.get('waiting') == 'plan_period':
+            context.user_data['plan_period'] = scrubbed
+            context.user_data['waiting'] = 'plan_freq'
+            await update.message.reply_text("Как часто публикуете?")
+            return
+
+        if context.user_data.get('waiting') == 'plan_freq':
+            plan = self.text_service.generate_content_plan(  # Синхронно
+                context.user_data['plan_period'], scrubbed, nko_info
+            )
+            await update.message.reply_text(f"Контент-план:\n\n{plan}", reply_markup=main_keyboard)
+            context.user_data['waiting'] = None
+            return
+
+        await update.message.reply_text("Выбери действие ниже", reply_markup=main_keyboard)
+
+    async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        data = query.data
+
+        if data.startswith("style_"):
+            styles = {
+                "style_casual": "разговорный, дружелюбный",
+                "style_formal": "официальный, строгий",
+                "style_artistic": "поэтичный, художественный",
+                "style_skip": None
+            }
+            style = styles[data]
+            prompt = context.user_data.get('last_prompt', 'Сделай красивый пост для НКО')
+            nko_info = context.user_data.get('nko_info', {})
+
+            await query.edit_message_text("Генерирую текст...")
+            result = self.text_service.generate_text(prompt, nko_info, style)  # Синхронно
+            await query.edit_message_text(f"Готово:\n\n{result}")
