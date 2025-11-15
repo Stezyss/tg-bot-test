@@ -16,12 +16,10 @@ class ImageService:
         self.model = self.model.configure(width_ratio=1, height_ratio=2, seed=42)
 
     async def generate_image(self, prompt: str, nco_info: Optional[dict] = None, style: Optional[str] = None) -> Optional[bytes]:
-        # --- Контекст НКО ---
         context = ""
         if nco_info and nco_info.get('name'):
-            context = f"Для НКО «{nco_info['name']}», тема: {nco_info.get('description', '')}. "
+            context = f"Для НКО «{nco_info['name']}». "
 
-        # --- Стиль: ЯВНО УКАЗЫВАЕМ ---
         style_part = ""
         if style:
             style_map = {
@@ -32,13 +30,9 @@ class ImageService:
             }
             style_part = style_map.get(style.lower(), style) + ". "
 
-        # --- Запрещаем --- без текста на изображении,Глубокая резкость, мягкие переходы, физкорректное освещение, натуральные цвета. Атмосфера настоящей фотографии: высокого качества, без стилизации и мультяшности.
-        ban = ""
-
-        # --- Финальный промт ---
         full_prompt = [
-            f"{context}{prompt} {style_part}. {ban}",
-            "эмоционально, тепло, высокое качество, текста на изображении, профессиональная композиция"
+            f"{context}{prompt} {style_part}",
+            "эмоционально, тепло, высокое качество, без текста на изображении, профессиональная композиция"
         ]
 
         print(f"[ART] Промт: {full_prompt[0][:500]}...")

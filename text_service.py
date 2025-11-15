@@ -1,6 +1,6 @@
 # text_service.py
 from yandex_cloud_ml_sdk import YCloudML
-from typing import Optional, Dict
+from typing import Optional
 from datetime import datetime, timedelta
 from config import Config
 
@@ -23,11 +23,10 @@ class TextService:
         if nco_info and any(nco_info.values()):
             context = (
                 f"Информация об НКО:\n"
-                f"• Название: {nco_info.get('name', '')}\n"
-                f"• Миссия: {nco_info.get('description', '')}\n"
-                f"• Деятельность: {nco_info.get('activities', '')}\n"
-                f"• Аудитория: {nco_info.get('audience', '')}\n"
-                f"• Сайт: {nco_info.get('website', '')}\n\n"
+                f"* Название: {nco_info.get('name', '')}\n"
+                f"* Деятельность: {nco_info.get('activities', '')}\n"
+                f"* Аудитория: {nco_info.get('audience', '')}\n"
+                f"* Сайт: {nco_info.get('website', '')}\n\n"
             )
 
         style_hint = f"Стиль: {style}. " if style else ""
@@ -36,9 +35,25 @@ class TextService:
         result = self.model.run(full_prompt)
         return result.alternatives[0].text.strip()
 
-    def edit_text(self, text: str, nco_info: Optional[dict] = None) -> str:
-        prompt = f"Отредактируй этот текст для соцсетей НКО. Сделай ярче, человечнее, с призывом:\n\n{text}"
+    def edit_text_with_action(self, text: str, action: str, nco_info: Optional[dict] = None, style: Optional[str] = None) -> str:
+        if action == "Увеличить текст":
+            prompt = f"Расширь этот текст для соцсетей НКО, добавь детали, эмоции, сделай ярче и с призывом к действию:\n\n{text}"
+        elif action == "Сократи текст":
+            prompt = f"Сократи этот текст для соцсетей НКО, сохрани суть, сделай ярче и с призывом:\n\n{text}"
+        elif action == "Исправить ошибки":
+            prompt = f"Исправь орфографические, грамматические, логические и речевые ошибки в этом тексте. Сделай готовый пост для НКО — яркий, человечный, с призывом:\n\n{text}"
+        elif action == "Перефразировать":
+            prompt = f"Перефразируй этот текст для соцсетей НКО, сохрани смысл, сделай ярче, человечнее, с призывом:\n\n{text}"
+        elif action == "Изменить стиль":
+            style_name = "без стиля" if style is None else style
+            prompt = f"Перепиши этот текст в {style_name} стиле для НКО, сделай ярко, с призывом:\n\n{text}"
+        else:
+            prompt = f"Отредактируй этот текст для соцсетей НКО. Сделай ярче, человечнее, с призывом:\n\n{text}"
+
         return self.generate_text(prompt, nco_info)
+
+    def edit_text(self, text: str, nco_info: Optional[dict] = None) -> str:
+        return self.edit_text_with_action(text, "default", nco_info)
 
     def generate_content_plan(
         self,
@@ -84,11 +99,10 @@ class TextService:
         if nco_info and any(nco_info.values()):
             context = (
                 f"Информация об НКО:\n"
-                f"• Название: {nco_info.get('name', '')}\n"
-                f"• Миссия: {nco_info.get('description', '')}\n"
-                f"• Деятельность: {nco_info.get('activities', '')}\n"
-                f"• Аудитория: {nco_info.get('audience', '')}\n"
-                f"• Сайт: {nco_info.get('website', '')}\n\n"
+                f"* Название: {nco_info.get('name', '')}\n"
+                f"* Деятельность: {nco_info.get('activities', '')}\n"
+                f"* Аудитория: {nco_info.get('audience', '')}\n"
+                f"* Сайт: {nco_info.get('website', '')}\n\n"
             )
 
         theme_hint = f"Тема: {theme}\n" if theme else ""
