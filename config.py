@@ -1,3 +1,4 @@
+# config.py
 import os
 from dataclasses import dataclass
 
@@ -7,6 +8,7 @@ class Config:
     TELEGRAM_BOT_TOKEN: str
     YANDEX_FOLDER_ID: str
     YANDEX_OAUTH_TOKEN: str
+    YANDEX_IAM_TOKEN: str  # ← НОВОЕ: IAM-токен напрямую
     AI_SYSTEM_PROMPT: str = (
         "Ты — профессиональный SMM-менеджер и копирайтер для НКО. "
         "Пиши эмоциональные, вдохновляющие посты на русском языке. "
@@ -19,17 +21,20 @@ class Config:
         token = os.getenv('TELEGRAM_BOT_TOKEN')
         folder_id = os.getenv('YANDEX_FOLDER_ID')
         oauth_token = os.getenv('YANDEX_OAUTH_TOKEN')
+        iam_token = os.getenv('YANDEX_IAM_TOKEN')  # ← НОВОЕ
 
-        if not all([token, folder_id, oauth_token]):
+        if not all([token, folder_id, oauth_token, iam_token]):
             missing = [k for k, v in {
                 'TELEGRAM_BOT_TOKEN': token,
                 'YANDEX_FOLDER_ID': folder_id,
-                'YANDEX_OAUTH_TOKEN': oauth_token
+                'YANDEX_OAUTH_TOKEN': oauth_token,
+                'YANDEX_IAM_TOKEN': iam_token
             }.items() if not v]
-            raise ValueError(f"Отсутствуют переменные: {', '.join(missing)}")
+            raise ValueError(f"Отсутствуют: {', '.join(missing)}")
 
         return cls(
             TELEGRAM_BOT_TOKEN=token,
             YANDEX_FOLDER_ID=folder_id,
-            YANDEX_OAUTH_TOKEN=oauth_token
+            YANDEX_OAUTH_TOKEN=oauth_token,
+            YANDEX_IAM_TOKEN=iam_token
         )

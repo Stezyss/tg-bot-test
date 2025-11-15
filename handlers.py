@@ -5,60 +5,61 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from text_service import TextService
 from image_service import ImageService
+from attachment_service import AttachmentService
 
 
-# ───── КЛАВИАТУРЫ С ЭМОДЗИ ───────────────────────────────────────────────────────
+# ───── КЛАВИАТУРЫ ─────────────────────────────────────────────────────────────
 main_keyboard = ReplyKeyboardMarkup([
-    ["📝 Генерация текста", "🎨 Генерация изображения"],
-    ["✏️ Редактор текста", "📅 Контент-план"],
-    ["🔍 Предоставить информацию об НКО"]
+    ["Генерация текста", "Генерация изображения"],
+    ["Редактор текста", "Контент-план"],
+    ["Предоставить информацию об НКО"]
 ], resize_keyboard=True)
 
-back_to_main_keyboard = ReplyKeyboardMarkup([
-    ["🔙 Назад в главное меню"]
+back_to_main_keyboard = ReplyKeyboardMarkup([["Назад в главное меню"]], resize_keyboard=True)
+back_skip_to_main_keyboard = ReplyKeyboardMarkup([["Назад в главное меню", "Пропустить"]], resize_keyboard=True)
+back_skip_keyboard = ReplyKeyboardMarkup([["Назад", "Пропустить"]], resize_keyboard=True)
+back_only_keyboard = ReplyKeyboardMarkup([["Назад"]], resize_keyboard=True)
+
+text_mode_keyboard = ReplyKeyboardMarkup([
+    ["Свободный текст", "Структурированная форма"],
+    ["Назад в главное меню"]
 ], resize_keyboard=True)
 
-# только для первого вопроса (название НКО)
-back_skip_to_main_keyboard = ReplyKeyboardMarkup([
-    ["🔙 Назад в главное меню", "⏭️ Пропустить"]
-], resize_keyboard=True)
-
-back_skip_keyboard = ReplyKeyboardMarkup([
-    ["🔙 Назад", "⏭️ Пропустить"]
-], resize_keyboard=True)
-
-back_only_keyboard = ReplyKeyboardMarkup([
-    ["🔙 Назад"]
+post_type_keyboard = ReplyKeyboardMarkup([
+    ["Анонс", "Новости"],
+    ["Призыв к действию", "Отчет"],
+    ["Назад"]
 ], resize_keyboard=True)
 
 style_keyboard = ReplyKeyboardMarkup([
-    ["💬 Разговорный", "🏢 Официальный"],
-    ["🎭 Художественный", "⚪ Без стиля"],
-    ["🔙 Назад"]
+    ["Разговорный", "Официальный"],
+    ["Художественный", "Без стиля"],
+    ["Назад"]
 ], resize_keyboard=True)
 
 image_style_keyboard = ReplyKeyboardMarkup([
-    ["🎨 Реализм", "🦄 Мультяшный"],
-    ["💧 Акварель", "🔳 Минимализм"],
-    ["🔙 Назад"]
+    ["Реализм", "Мультяшный"],
+    ["Акварель", "Киберпанк"],
+    ["Свой стиль"],
+    ["Назад"]
 ], resize_keyboard=True)
 
 period_keyboard = ReplyKeyboardMarkup([
-    ["📅 Неделя", "📆 Месяц"],
-    ["📊 Ввести свой период"],
-    ["🔙 Назад в главное меню"]
+    ["Неделя", "Месяц"],
+    ["Ввести свой период"],
+    ["Назад в главное меню"]
 ], resize_keyboard=True)
 
 freq_week_keyboard = ReplyKeyboardMarkup([
-    ["🔄 1 раз в день", "🔄 2 раза в неделю", "🔄 3 раза в неделю"],
-    ["🔄 1 раз в неделю"],
-    ["🔙 Назад"]
+    ["1 раз в день", "2 раза в неделю", "3 раза в неделю"],
+    ["1 раз в неделю"],
+    ["Назад"]
 ], resize_keyboard=True)
 
 freq_month_keyboard = ReplyKeyboardMarkup([
-    ["🔄 1 раз в день", "🔄 2 раза в неделю", "🔄 3 раза в неделю"],
-    ["🔄 1 раз в неделю", "🔄 2 раза в месяц"],
-    ["🔙 Назад"]
+    ["1 раз в день", "2 раза в неделю", "3 раза в неделю"],
+    ["1 раз в неделю", "2 раза в месяц"],
+    ["Назад"]
 ], resize_keyboard=True)
 
 
@@ -70,446 +71,332 @@ def scrub_pii(text: str):
 
 
 class BotHandlers:
-    def __init__(self, text_service: TextService, image_service: ImageService):
+    def __init__(self, text_service: TextService, image_service: ImageService, attachment_service: AttachmentService):
         self.text_service = text_service
         self.image_service = image_service
+        self.attachment_service = attachment_service
 
-    # ───── /start ───────────────────────────────────────────────────────────────
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
-        context.user_data['nko_info'] = {
+        context.user_data['nco_info'] = {
             'name': '', 'description': '', 'activities': '',
             'audience': '', 'website': ''
         }
-        context.user_data['nko_skipped_all'] = False  # флаг: все поля пропущены
         await update.message.reply_text(
-            "👋 Привет! Я помогу создавать посты и картинки для НКО\n\n"
-            "📋 Сначала можешь рассказать о своей организации (необязательно)",
+            "Привет! Я помогу создавать посты и картинки для НКО\n\n"
+            "Загрузи фото или документ — я извлеку текст и сделаю пост!\n"
+            "Или выбери действие ниже.",
             reply_markup=main_keyboard
         )
 
-    # ───── Обработчик всех текстовых сообщений ─────────────────────────────────────
+    async def group_start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        context.user_data['active_session'] = True
+        context.user_data['session_user_id'] = update.effective_user.id
+        await update.message.reply_text(
+            "Готов работать в группе! Загружай файлы или выбирай действие.",
+            reply_markup=main_keyboard,
+            reply_to_message_id=update.message.message_id
+        )
+
     async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.message.chat.type in ['group', 'supergroup']:
+            if not context.user_data.get('active_session') or update.effective_user.id != context.user_data.get('session_user_id'):
+                return
+
+        reply_kwargs = {}
+        if update.message.chat.type in ['group', 'supergroup']:
+            reply_kwargs['reply_to_message_id'] = update.message.message_id
+
+        # ── ВЛОЖЕНИЯ (фото/документ) ───────────────────────────────────────
+        if update.message.photo or update.message.document:
+            await update.message.reply_text("Анализирую вложение...", **reply_kwargs)
+            content = await self.attachment_service.process_attachment(update.message)
+            if content and content.strip():
+                context.user_data['last_prompt'] = content
+                context.user_data['waiting'] = 'select_style'
+                await update.message.reply_text(
+                    "Готово!\n\nВыбери стиль для поста:",
+                    reply_markup=style_keyboard,
+                    **reply_kwargs
+                )
+            else:
+                await update.message.reply_text(
+                    "Не удалось извлечь текст.",
+                    reply_markup=main_keyboard,
+                    **reply_kwargs
+                )
+            return
+
         text = update.message.text.strip()
         scrubbed, _ = scrub_pii(text)
-        nko_info = context.user_data.get('nko_info', {})
+        nco_info = context.user_data.get('nco_info', {})
         state = context.user_data.get('state')
         waiting = context.user_data.get('waiting')
 
-        # ── Назад в главное меню ─────────────────────────────────────────────────
-        if text == "🔙 Назад в главное меню":
+        # ── НАЗАД В ГЛАВНОЕ МЕНЮ ───────────────────────────────────────
+        if text == "Назад в главное меню":
             context.user_data.clear()
-            context.user_data['nko_info'] = {}
-            await update.message.reply_text(
-                "👇 Возвращаюсь в главное меню", reply_markup=main_keyboard
-            )
+            context.user_data['nco_info'] = {}
+            await update.message.reply_text("Возвращаюсь в главное меню", reply_markup=main_keyboard, **reply_kwargs)
             return
 
-        # ── НАЗАД ───────────────────────────────────────────────────────────────
-        if text == "🔙 Назад":
-            if 'nko_skipped_all' in context.user_data:
-                del context.user_data['nko_skipped_all']
-
-            if state == 'nko_desc':
-                context.user_data['state'] = 'nko_name'
-                await update.message.reply_text(
-                    "🏷️ Название НКО? (например, «Благотворительный фонд «Добро»)",
-                    reply_markup=back_skip_to_main_keyboard
-                )
-                return
-            if state == 'nko_act':
-                context.user_data['state'] = 'nko_desc'
-                await update.message.reply_text(
-                    "📜 Краткое описание миссии? (1–2 предложения, например: «Помогаем детям-сиротам найти любящую семью»)",
-                    reply_markup=back_skip_keyboard
-                )
-                return
-            if state == 'nko_audience':
-                context.user_data['state'] = 'nko_act'
-                await update.message.reply_text(
-                    "⚙️ Чем занимаетесь? (например, помощь детям, экология, поддержка пожилых)",
-                    reply_markup=back_skip_keyboard
-                )
-                return
-            if state == 'nko_website':
-                context.user_data['state'] = 'nko_audience'
-                await update.message.reply_text(
-                    "👥 Целевая аудитория? (дети, студенты, работники, пенсионеры и т.д.)",
-                    reply_markup=back_skip_keyboard
-                )
-                return
-
-            if waiting == 'plan_freq':
-                context.user_data['waiting'] = 'plan_period'
-                await update.message.reply_text(
-                    "📆 Выбери период для контент-плана (например: Неделя или Месяц):",
-                    reply_markup=period_keyboard
-                )
-                return
-            if waiting == 'plan_end_date':
-                context.user_data['waiting'] = 'plan_start_date'
-                await update.message.reply_text(
-                    "📅 Укажи начальную дату (дд.мм.гггг, например 15.11.2025):",
-                    reply_markup=back_only_keyboard
-                )
-                return
-            if waiting == 'plan_start_date':
-                context.user_data['waiting'] = 'plan_period'
-                await update.message.reply_text(
-                    "📆 Выбери период для контент-плана (например: Неделя или Месяц):",
-                    reply_markup=period_keyboard
-                )
-                return
-
+        # ── НАЗАД ───────────────────────────────────────────────────────
+        if text == "Назад":
             if waiting == 'select_style':
-                context.user_data['waiting'] = 'text_prompt'
+                context.user_data['waiting'] = 'text_mode'
+                await update.message.reply_text("Режим:", reply_markup=text_mode_keyboard, **reply_kwargs)
+            elif waiting == 'text_prompt':
+                context.user_data['waiting'] = 'select_post_type' if context.user_data.get('text_mode') == 'structured' else 'text_mode'
                 await update.message.reply_text(
-                    "📝 О чём пост? (идея в 1–2 предложения)",
-                    reply_markup=back_to_main_keyboard
+                    "Выбери:",
+                    reply_markup=post_type_keyboard if context.user_data.get('text_mode') == 'structured' else text_mode_keyboard,
+                    **reply_kwargs
                 )
-                return
-            if waiting == 'image_style':
+            elif waiting == 'select_post_type':
+                context.user_data['waiting'] = 'text_mode'
+                await update.message.reply_text("Режим:", reply_markup=text_mode_keyboard, **reply_kwargs)
+            elif waiting == 'image_style':
                 context.user_data['waiting'] = 'image_prompt'
-                await update.message.reply_text(
-                    "🎨 Опиши картинку:",
-                    reply_markup=back_to_main_keyboard
-                )
-                return
-            return
-
-        # ── Пропустить ───────────────────────────────────────────────────────────
-        if text == "⏭️ Пропустить":
-            if state == 'nko_name':
-                nko_info['name'] = ''
-                context.user_data['state'] = 'nko_desc'
-                await update.message.reply_text(
-                    "📜 Краткое описание миссии? (1–2 предложения, например: «Помогаем детям-сиротам найти любяющую семью»)",
-                    reply_markup=back_skip_keyboard
-                )
-            elif state == 'nko_desc':
-                nko_info['description'] = ''
-                context.user_data['state'] = 'nko_act'
-                await update.message.reply_text(
-                    "⚙️ Чем занимаетесь? (например, помощь детям, экология, поддержка пожилых)",
-                    reply_markup=back_skip_keyboard
-                )
-            elif state == 'nko_act':
-                nko_info['activities'] = ''
-                context.user_data['state'] = 'nko_audience'
-                await update.message.reply_text(
-                    "👥 Целевая аудитория? (дети, студенты, работники, пенсионеры и т.д.)",
-                    reply_markup=back_skip_keyboard
-                )
-            elif state == 'nko_audience':
-                nko_info['audience'] = ''
-                context.user_data['state'] = 'nko_website'
-                await update.message.reply_text(
-                    "🌐 Веб-сайт (при наличии)? (пример: https://example.org)",
-                    reply_markup=back_skip_keyboard
-                )
-            elif state == 'nko_website':
-                nko_info['website'] = ''
-                context.user_data['state'] = None
-                context.user_data['nko_info'] = nko_info
-
-                # Проверяем: все поля пустые?
-                if not any(nko_info.values()):
-                    context.user_data['nko_skipped_all'] = True
-                    await update.message.reply_text(
-                        "❌ Информация не была предоставлена!",
-                        reply_markup=main_keyboard
-                    )
-                else:
-                    await update.message.reply_text(
-                        "✅ Информация сохранена! Теперь посты будут персональными",
-                        reply_markup=main_keyboard
-                    )
-            return
-
-        # ── Предоставить информацию об НКО (первый клик) ───────────────────────
-        if text == "🔍 Предоставить информацию об НКО":
-            context.user_data['state'] = 'nko_name'
-            context.user_data.pop('nko_skipped_all', None)  # сбрасываем флаг
-            await update.message.reply_text(
-                "🏷️ Название НКО? (например, «Благотворительный фонд «Добро»)",
-                reply_markup=back_skip_to_main_keyboard
-            )
-            return
-
-        # ── Ввод информации НКО ─────────────────────────────────────────────────
-        if state == 'nko_name':
-            nko_info['name'] = scrubbed
-            context.user_data['state'] = 'nko_desc'
-            await update.message.reply_text(
-                "📜 Краткое описание миссии? (1–2 предложения, например: «Помогаем детям-сиротам найти любящую семью»)",
-                reply_markup=back_skip_keyboard
-            )
-            return
-
-        if state == 'nko_desc':
-            nko_info['description'] = scrubbed
-            context.user_data['state'] = 'nko_act'
-            await update.message.reply_text(
-                "⚙️ Чем занимаетесь? (например, помощь детям, экология, поддержка пожилых)",
-                reply_markup=back_skip_keyboard
-            )
-            return
-
-        if state == 'nko_act':
-            nko_info['activities'] = scrubbed
-            context.user_data['state'] = 'nko_audience'
-            await update.message.reply_text(
-                "👥 Целевая аудитория? (дети, студенты, работники, пенсионеры и т.д.)",
-                reply_markup=back_skip_keyboard
-            )
-            return
-
-        if state == 'nko_audience':
-            nko_info['audience'] = scrubbed
-            context.user_data['state'] = 'nko_website'
-            await update.message.reply_text(
-                "🌐 Веб-сайт (при наличии)? (пример: https://example.org)",
-                reply_markup=back_skip_keyboard
-            )
-            return
-
-        if state == 'nko_website':
-            nko_info['website'] = scrubbed
-            context.user_data['state'] = None
-            context.user_data['nko_info'] = nko_info
-
-            # Если хотя бы одно поле заполнено — персонализация
-            if any(nko_info.values()):
-                await update.message.reply_text(
-                    "✅ Информация сохранена! Теперь посты будут персональными",
-                    reply_markup=main_keyboard
-                )
-            else:
-                context.user_data['nko_skipped_all'] = True
-                await update.message.reply_text(
-                    "❌ Информация не была предоставлена",
-                    reply_markup=main_keyboard
-                )
-            return
-
-        # ── Основные действия ───────────────────────────────────────────────────
-        if text == "📝 Генерация текста":
-            context.user_data['waiting'] = 'text_prompt'
-            await update.message.reply_text(
-                "📝 О чём пост? (идея в 1–2 предложения)",
-                reply_markup=back_to_main_keyboard
-            )
-            return
-
-        if text == "🎨 Генерация изображения":
-            context.user_data['waiting'] = 'image_prompt'
-            await update.message.reply_text(
-                "🎨 Опиши картинку:",
-                reply_markup=back_to_main_keyboard
-            )
-            return
-
-        if text == "✏️ Редактор текста":
-            context.user_data['waiting'] = 'edit_text'
-            await update.message.reply_text(
-                "✏️ Пришли текст — я его улучшу",
-                reply_markup=back_to_main_keyboard
-            )
-            return
-
-        if text == "📅 Контент-план":
-            context.user_data['waiting'] = 'plan_period'
-            await update.message.reply_text(
-                "📆 Выбери период для контент-плана (например: Неделя или Месяц):",
-                reply_markup=period_keyboard
-            )
-            return
-
-        # ── Период ───────────────────────────────────────────────────────────────
-        if waiting == 'plan_period':
-            if text == "📅 Неделя":
-                context.user_data['plan_period'] = "неделя"
-                context.user_data['waiting'] = 'plan_freq'
-                await update.message.reply_text(
-                    "🔄 Как часто публикуете? (например: 1 раз в день, 2 раза в неделю)",
-                    reply_markup=freq_week_keyboard
-                )
-                return
-            elif text == "📆 Месяц":
-                context.user_data['plan_period'] = "месяц"
-                context.user_data['waiting'] = 'plan_freq'
-                await update.message.reply_text(
-                    "🔄 Как часто публикуете? (например: 1 раз в неделю, 2 раза в месяц)",
-                    reply_markup=freq_month_keyboard
-                )
-                return
-            elif text == "📊 Ввести свой период":
+                await update.message.reply_text("Опиши картинку:", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            elif waiting == 'custom_image_style':
+                context.user_data['waiting'] = 'image_style'
+                await update.message.reply_text("Стиль:", reply_markup=image_style_keyboard, **reply_kwargs)
+            elif waiting == 'plan_freq':
+                context.user_data['waiting'] = 'plan_period'
+                await update.message.reply_text("Период:", reply_markup=period_keyboard, **reply_kwargs)
+            elif waiting == 'plan_end_date':
                 context.user_data['waiting'] = 'plan_start_date'
-                await update.message.reply_text(
-                    "📅 Укажи начальную дату (дд.мм.гггг, например 15.11.2025):",
-                    reply_markup=back_only_keyboard
-                )
-                return
+                await update.message.reply_text("Начало:", reply_markup=back_only_keyboard, **reply_kwargs)
+            elif waiting == 'plan_start_date':
+                context.user_data['waiting'] = 'plan_period'
+                await update.message.reply_text("Период:", reply_markup=period_keyboard, **reply_kwargs)
+            elif waiting == 'plan_period':
+                context.user_data['waiting'] = 'plan_theme'
+                await update.message.reply_text("Тема:", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            return
 
-        # ── Пользовательский период – начало ─────────────────────────────────────
+        # ── НКО ─────────────────────────────────────────────────────────
+        if text == "Предоставить информацию об НКО":
+            context.user_data['state'] = 'nco_name'
+            await update.message.reply_text("Название НКО?", reply_markup=back_skip_to_main_keyboard, **reply_kwargs)
+            return
+
+        if state == 'nco_name':
+            nco_info['name'] = scrubbed
+            context.user_data['state'] = 'nco_desc'
+            await update.message.reply_text("Миссия?", reply_markup=back_skip_keyboard, **reply_kwargs)
+            return
+        if state == 'nco_desc':
+            nco_info['description'] = scrubbed
+            context.user_data['state'] = 'nco_act'
+            await update.message.reply_text("Деятельность?", reply_markup=back_skip_keyboard, **reply_kwargs)
+            return
+        if state == 'nco_act':
+            nco_info['activities'] = scrubbed
+            context.user_data['state'] = 'nco_audience'
+            await update.message.reply_text("Аудитория?", reply_markup=back_skip_keyboard, **reply_kwargs)
+            return
+        if state == 'nco_audience':
+            nco_info['audience'] = scrubbed
+            context.user_data['state'] = 'nco_website'
+            await update.message.reply_text("Сайт?", reply_markup=back_skip_keyboard, **reply_kwargs)
+            return
+        if state == 'nco_website':
+            nco_info['website'] = scrubbed
+            context.user_data['state'] = None
+            await update.message.reply_text("Инфо сохранена!", reply_markup=main_keyboard, **reply_kwargs)
+            return
+
+        if text == "Пропустить" and state:
+            if state == 'nco_name': nco_info['name'] = ''; context.user_data['state'] = 'nco_desc'
+            elif state == 'nco_desc': nco_info['description'] = ''; context.user_data['state'] = 'nco_act'
+            elif state == 'nco_act': nco_info['activities'] = ''; context.user_data['state'] = 'nco_audience'
+            elif state == 'nco_audience': nco_info['audience'] = ''; context.user_data['state'] = 'nco_website'
+            elif state == 'nco_website':
+                nco_info['website'] = ''
+                context.user_data['state'] = None
+                await update.message.reply_text("Готово!", reply_markup=main_keyboard, **reply_kwargs)
+                return
+            await update.message.reply_text("Пропущено", reply_markup=back_skip_keyboard, **reply_kwargs)
+            return
+
+        # ── ГЕНЕРАЦИЯ ТЕКСТА ───────────────────────────────────────────
+        if text == "Генерация текста":
+            context.user_data['waiting'] = 'text_mode'
+            await update.message.reply_text("Режим:", reply_markup=text_mode_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'text_mode':
+            if text == "Свободный текст":
+                context.user_data['text_mode'] = 'free'
+                context.user_data['waiting'] = 'text_prompt'
+                await update.message.reply_text("Введи запрос:", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            elif text == "Структурированная форма":
+                context.user_data['text_mode'] = 'structured'
+                context.user_data['waiting'] = 'select_post_type'
+                await update.message.reply_text("Тип поста:", reply_markup=post_type_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'select_post_type':
+            types = {"Анонс": "Анонс", "Новости": "Новость", "Призыв к действию": "Призыв", "Отчет": "Отчёт"}
+            if text in types:
+                context.user_data['post_type'] = types[text]
+                context.user_data['waiting'] = 'text_prompt'
+                await update.message.reply_text("О чём пост?", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'text_prompt':
+            context.user_data['last_prompt'] = scrubbed
+            context.user_data['waiting'] = 'select_style'
+            await update.message.reply_text("Стиль:", reply_markup=style_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'select_style':
+            styles = {"Разговорный": "разговорный", "Официальный": "официальный", "Художественный": "поэтичный", "Без стиля": None}
+            if text in styles:
+                style = styles[text]
+                prompt = context.user_data.get('last_prompt', '')
+                post_type = context.user_data.get('post_type', '')
+                full_prompt = f"{post_type}. {prompt}" if post_type else prompt
+                await update.message.reply_text("Готово!", **reply_kwargs)
+                await update.message.reply_text("Генерирую...", **reply_kwargs)
+                result = self.text_service.generate_text(full_prompt, nco_info, style)
+                await update.message.reply_text(result, reply_markup=main_keyboard, **reply_kwargs)
+                context.user_data.clear()
+                context.user_data['nco_info'] = nco_info
+            return
+
+        # ── ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ ───────────────────────────────────────
+        if text == "Генерация изображения":
+            context.user_data['waiting'] = 'image_prompt'
+            await update.message.reply_text("Опиши:", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'image_prompt':
+            context.user_data['image_prompt'] = scrubbed
+            context.user_data['waiting'] = 'image_style'
+            await update.message.reply_text("Стиль:", reply_markup=image_style_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'image_style':
+            styles = {"Реализм": "реализм", "Мультяшный": "мультяшный", "Акварель": "акварель", "Киберпанк": "киберпанк"}
+            if text in styles:
+                style = styles[text]
+                await update.message.reply_text("Готово!", **reply_kwargs)
+                await update.message.reply_text("Генерирую...", **reply_kwargs)
+                img = await self.image_service.generate_image(context.user_data['image_prompt'], nco_info, style)
+                if img:
+                    await update.message.reply_photo(photo=img, reply_markup=main_keyboard, **reply_kwargs)
+                else:
+                    await update.message.reply_text("Ошибка генерации", reply_markup=main_keyboard, **reply_kwargs)
+                context.user_data.clear()
+                context.user_data['nco_info'] = nco_info
+            elif text == "Свой стиль":
+                context.user_data['waiting'] = 'custom_image_style'
+                await update.message.reply_text("Введи стиль:", reply_markup=back_only_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'custom_image_style':
+            style = scrubbed
+            await update.message.reply_text("Готово!", **reply_kwargs)
+            await update.message.reply_text("Генерирую...", **reply_kwargs)
+            img = await self.image_service.generate_image(context.user_data['image_prompt'], nco_info, style)
+            if img:
+                await update.message.reply_photo(photo=img, reply_markup=main_keyboard, **reply_kwargs)
+            else:
+                await update.message.reply_text("Ошибка генерации", reply_markup=main_keyboard, **reply_kwargs)
+            context.user_data.clear()
+            context.user_data['nco_info'] = nco_info
+            return
+
+        # ── РЕДАКТОР ТЕКСТА ─────────────────────────────────────────────
+        if text == "Редактор текста":
+            context.user_data['waiting'] = 'edit_text'
+            await update.message.reply_text("Введи текст:", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'edit_text':
+            await update.message.reply_text("Готово!", **reply_kwargs)
+            await update.message.reply_text("Улучшаю...", **reply_kwargs)
+            result = self.text_service.edit_text(scrubbed, nco_info)
+            await update.message.reply_text(result, reply_markup=main_keyboard, **reply_kwargs)
+            context.user_data['waiting'] = None
+            return
+
+        # ── КОНТЕНТ-ПЛАН ───────────────────────────────────────────────
+        if text == "Контент-план":
+            context.user_data['waiting'] = 'plan_theme'
+            await update.message.reply_text("Тема:", reply_markup=back_to_main_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'plan_theme':
+            context.user_data['plan_theme'] = scrubbed
+            context.user_data['waiting'] = 'plan_period'
+            await update.message.reply_text("Период:", reply_markup=period_keyboard, **reply_kwargs)
+            return
+
+        if waiting == 'plan_period':
+            if text == "Неделя":
+                context.user_data['plan_period'] = "неделя"
+            elif text == "Месяц":
+                context.user_data['plan_period'] = "месяц"
+            elif text == "Ввести свой период":
+                context.user_data['waiting'] = 'plan_start_date'
+                await update.message.reply_text("Начало (дд.мм.гггг):", reply_markup=back_only_keyboard, **reply_kwargs)
+                return
+            else:
+                return
+            context.user_data['waiting'] = 'plan_freq'
+            await update.message.reply_text(
+                "Частота:",
+                reply_markup=freq_week_keyboard if context.user_data['plan_period'] == "неделя" else freq_month_keyboard,
+                **reply_kwargs
+            )
+            return
+
         if waiting == 'plan_start_date':
             try:
                 start = datetime.strptime(text, "%d.%m.%Y").date()
                 context.user_data['plan_start_date'] = start
                 context.user_data['waiting'] = 'plan_end_date'
-                await update.message.reply_text(
-                    "📅 Укажи конечную дату (дд.мм.гггг, например 30.11.2025):",
-                    reply_markup=back_only_keyboard
-                )
-            except ValueError:
-                await update.message.reply_text(
-                    "❌ Неверный формат. Пример: 15.11.2025",
-                    reply_markup=back_only_keyboard
-                )
+                await update.message.reply_text("Конец:", reply_markup=back_only_keyboard, **reply_kwargs)
+            except:
+                await update.message.reply_text("Формат: 15.11.2025", reply_markup=back_only_keyboard, **reply_kwargs)
             return
 
-        # ── Пользовательский период – конец ─────────────────────────────────────
         if waiting == 'plan_end_date':
             try:
                 end = datetime.strptime(text, "%d.%m.%Y").date()
-                start = context.user_data.get('plan_start_date')
+                start = context.user_data['plan_start_date']
                 if end < start:
-                    await update.message.reply_text(
-                        "❌ Конечная дата должна быть позже начальной. Пример: 30.11.2025",
-                        reply_markup=back_only_keyboard
-                    )
+                    await update.message.reply_text("Конец позже начала", reply_markup=back_only_keyboard, **reply_kwargs)
                     return
                 context.user_data['plan_end_date'] = end
                 context.user_data['plan_period'] = "custom"
                 context.user_data['waiting'] = 'plan_freq'
-
-                delta = (end - start).days
-                if delta <= 7:
-                    await update.message.reply_text(
-                        "🔄 Как часто публикуете? (например: 1 раз в день, 2 раза в неделю)",
-                        reply_markup=freq_week_keyboard
-                    )
-                else:
-                    await update.message.reply_text(
-                        "🔄 Как часто публикуете? (например: 1 раз в неделю, 2 раза в месяц)",
-                        reply_markup=freq_month_keyboard
-                    )
-            except ValueError:
                 await update.message.reply_text(
-                    "❌ Неверный формат. Пример: 30.11.2025",
-                    reply_markup=back_only_keyboard
+                    "Частота:",
+                    reply_markup=freq_week_keyboard if (end - start).days <= 7 else freq_month_keyboard,
+                    **reply_kwargs
                 )
+            except:
+                await update.message.reply_text("Формат: 30.11.2025", reply_markup=back_only_keyboard, **reply_kwargs)
             return
 
-        # ── Частота и генерация плана ───────────────────────────────────────────
         if waiting == 'plan_freq':
-            valid_freq = [
-                "🔄 1 раз в день", "🔄 2 раза в неделю", "🔄 3 раза в неделю",
-                "🔄 1 раз в неделю", "🔄 2 раза в месяц"
-            ]
-            if text in valid_freq:
-                period = context.user_data.get('plan_period', 'неделя')
-                frequency = text.replace("🔄 ", "")  # Убираем эмодзи для логики
+            freq = text
+            period = context.user_data['plan_period']
+            theme = context.user_data['plan_theme']
+            start = datetime.now().date() if period != "custom" else context.user_data['plan_start_date']
+            end = None if period != "custom" else context.user_data['plan_end_date']
 
-                start_date = datetime.now().date()
-                end_date = None
-                if period == "custom":
-                    start_date = context.user_data.get('plan_start_date')
-                    end_date = context.user_data.get('plan_end_date')
-
-                await update.message.reply_text("⏳ Генерирую контент-план...")
-                plan = self.text_service.generate_content_plan(
-                    period=period,
-                    frequency=frequency,
-                    nko_info=nko_info,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                await update.message.reply_text(
-                    f"📋 Контент-план:\n\n{plan}", reply_markup=main_keyboard
-                )
-                context.user_data['waiting'] = None
-                return
-
-        # ── Генерация текста ───────────────────────────────────────────────────
-        if waiting == 'text_prompt':
-            context.user_data['last_prompt'] = scrubbed
-            await update.message.reply_text(
-                "🎨 Выбери стиль:", reply_markup=style_keyboard
-            )
-            context.user_data['waiting'] = 'select_style'
+            await update.message.reply_text("Готово!", **reply_kwargs)
+            await update.message.reply_text("Генерирую план...", **reply_kwargs)
+            plan = self.text_service.generate_content_plan(period, freq, nco_info, start, end, theme)
+            await update.message.reply_text(f"Контент-план:\n\n{plan}", reply_markup=main_keyboard, **reply_kwargs)
+            context.user_data.clear()
+            context.user_data['nco_info'] = nco_info
             return
 
-        if waiting == 'select_style':
-            styles = {
-                "💬 Разговорный": "разговорный, дружелюбный",
-                "🏢 Официальный": "официальный, строгий",
-                "🎭 Художественный": "поэтичный, художественный",
-                "⚪ Без стиля": None
-            }
-            if text in styles:
-                style = styles[text]
-                prompt = context.user_data.get('last_prompt', 'Сделай красивый пост для НКО')
-                await update.message.reply_text("⏳ Генерирую текст...")
-                result = self.text_service.generate_text(prompt, nko_info, style)
-                await update.message.reply_text(
-                    f"✅ Готово:\n\n{result}", reply_markup=main_keyboard
-                )
-                context.user_data['waiting'] = None
-            else:
-                await update.message.reply_text(
-                    "👇 Выбери стиль из кнопок", reply_markup=style_keyboard
-                )
-            return
-
-        # ── Генерация изображения ───────────────────────────────────────────────
-        if waiting == 'image_prompt':
-            context.user_data['image_prompt'] = scrubbed
-            await update.message.reply_text(
-                "🎨 Выбери стиль картинки:", reply_markup=image_style_keyboard
-            )
-            context.user_data['waiting'] = 'image_style'
-            return
-
-        if waiting == 'image_style':
-            styles = {
-                "🎨 Реализм": "реализм",
-                "🦄 Мультяшный": "мультяшный",
-                "💧 Акварель": "акварель",
-                "🔳 Минимализм": "минимализм"
-            }
-            if text in styles:
-                style = styles[text]
-                prompt = context.user_data['image_prompt']
-                full_prompt = f"{prompt}, стиль: {style}"
-                await update.message.reply_text("⏳ Генерирую...")
-                img = await self.image_service.generate_image(full_prompt, nko_info)
-                if img:
-                    await update.message.reply_photo(
-                        photo=img, caption="✅ Готово!", reply_markup=main_keyboard
-                    )
-                else:
-                    await update.message.reply_text(
-                        "❌ Не получилось сгенерировать", reply_markup=main_keyboard
-                    )
-                context.user_data['waiting'] = None
-            else:
-                await update.message.reply_text(
-                    "👇 Выбери стиль из кнопок", reply_markup=image_style_keyboard
-                )
-            return
-
-        # ── Редактор текста ─────────────────────────────────────────────────────
-        if waiting == 'edit_text':
-            await update.message.reply_text("⏳ Улучшаю текст...")
-            result = self.text_service.edit_text(scrubbed, nko_info)
-            await update.message.reply_text(
-                f"✨ Улучшено:\n\n{result}", reply_markup=main_keyboard
-            )
-            context.user_data['waiting'] = None
-            return
-
-        # ── Если ничего не подошло ───────────────────────────────────────────────
-        await update.message.reply_text(
-            "👇 Выбери действие ниже", reply_markup=main_keyboard
-        )
+        # ── ПО УМОЛЧАНИЮ ───────────────────────────────────────────────
+        await update.message.reply_text("Выбери действие:", reply_markup=main_keyboard, **reply_kwargs)

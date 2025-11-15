@@ -1,3 +1,4 @@
+# text_service.py
 from yandex_cloud_ml_sdk import YCloudML
 from typing import Optional, Dict
 from datetime import datetime, timedelta
@@ -13,23 +14,20 @@ class TextService:
         self.sdk.setup_default_logging()
 
         self.model = self.sdk.models.completions('yandexgpt')
-        self.model = self.model.configure(temperature=0.7, max_tokens=1500)
+        self.model = self.model.configure(temperature=0.7, max_tokens=700)
 
         self.system_prompt = config.AI_SYSTEM_PROMPT
 
-    def generate_text(self, user_prompt: str, nko_info: Optional[dict] = None, style: Optional[str] = None) -> str:
+    def generate_text(self, user_prompt: str, nco_info: Optional[dict] = None, style: Optional[str] = None) -> str:
         context = ""
-        if nko_info and any(nko_info.values()):
+        if nco_info and any(nco_info.values()):
             context = (
                 f"Информация об НКО:\n"
-                f"• Название: {nko_info.get('name', '')}\n"
-                f"• Миссия: {nko_info.get('description', '')}\n"
-                f"• Деятельность: {nko_info.get('activities', '')}\n"
-                f"• Аудитория: {nko_info.get('audience', '')}\n"
-                f"• Сайт: {nko_info.get('website', '')}\n"
-                f"• Соцсети: {nko_info.get('socials', '')}\n"
-                f"• Контакты: {nko_info.get('contacts', '')}\n"
-                f"• Цвета: {nko_info.get('colors', '')}\n\n"
+                f"• Название: {nco_info.get('name', '')}\n"
+                f"• Миссия: {nco_info.get('description', '')}\n"
+                f"• Деятельность: {nco_info.get('activities', '')}\n"
+                f"• Аудитория: {nco_info.get('audience', '')}\n"
+                f"• Сайт: {nco_info.get('website', '')}\n\n"
             )
 
         style_hint = f"Стиль: {style}. " if style else ""
@@ -38,16 +36,18 @@ class TextService:
         result = self.model.run(full_prompt)
         return result.alternatives[0].text.strip()
 
-    def edit_text(self, text: str, nko_info: Optional[dict] = None) -> str:
+    def edit_text(self, text: str, nco_info: Optional[dict] = None) -> str:
         prompt = f"Отредактируй этот текст для соцсетей НКО. Сделай ярче, человечнее, с призывом:\n\n{text}"
-        return self.generate_text(prompt, nko_info)
+        return self.generate_text(prompt, nco_info)
 
     def generate_content_plan(
         self,
         period: str,
         frequency: str,
-        nko_info: Optional[dict] = None,
-        start_date: Optional[datetime.date] = None
+        nco_info: Optional[dict] = None,
+        start_date: Optional[datetime.date] = None,
+        end_date: Optional[datetime.date] = None,
+        theme: Optional[str] = None
     ) -> str:
         if start_date is None:
             start_date = datetime.now().date()
@@ -55,9 +55,15 @@ class TextService:
         if period == "неделя":
             end_date = start_date + timedelta(days=6)
             days = 7
-        else:  # месяц
+        elif period == "месяц":
             end_date = start_date + timedelta(days=29)
             days = 30
+        elif period == "custom":
+            if end_date is None:
+                raise ValueError("Для custom периода требуется end_date")
+            days = (end_date - start_date).days + 1
+        else:
+            raise ValueError("Неверный период")
 
         interval_map = {
             "1 раз в день": 1,
@@ -67,34 +73,33 @@ class TextService:
             "2 раза в месяц": 15
         }
         interval = interval_map.get(frequency, 7)
-        post_dates = []
-        i = 0
-        current = start_date
-        while current <= end_date:
-            post_dates.append(current)
-            i += 1
-            current = start_date + timedelta(days=int(i * interval))
+
+        num_posts = max(1, int(days / interval))
+        if num_posts > 30:
+            num_posts = 30
+        step = days / num_posts if num_posts > 0 else 1
+        post_dates = [start_date + timedelta(days=int(i * step)) for i in range(num_posts)]
 
         context = ""
-        if nko_info and any(nko_info.values()):
+        if nco_info and any(nco_info.values()):
             context = (
                 f"Информация об НКО:\n"
-                f"• Название: {nko_info.get('name', '')}\n"
-                f"• Миссия: {nko_info.get('description', '')}\n"
-                f"• Деятельность: {nko_info.get('activities', '')}\n"
-                f"• Аудитория: {nko_info.get('audience', '')}\n"
-                f"• Сайт: {nko_info.get('website', '')}\n"
-                f"• Соцсети: {nko_info.get('socials', '')}\n"
-                f"• Контакты: {nko_info.get('contacts', '')}\n"
-                f"• Цвета: {nko_info.get('colors', '')}\n\n"
+                f"• Название: {nco_info.get('name', '')}\n"
+                f"• Миссия: {nco_info.get('description', '')}\n"
+                f"• Деятельность: {nco_info.get('activities', '')}\n"
+                f"• Аудитория: {nco_info.get('audience', '')}\n"
+                f"• Сайт: {nco_info.get('website', '')}\n\n"
             )
 
+        theme_hint = f"Тема: {theme}\n" if theme else ""
+        period_desc = period if period != "custom" else f"с {start_date.strftime('%d.%m.%Y')} по {end_date.strftime('%d.%m.%Y')}"
         prompt = (
             f"{self.system_prompt}\n\n"
             f"{context}"
-            f"Составь контент-план на {period} с частотой «{frequency}», начиная с {start_date.strftime('%d.%m.%Y')}.\n"
+            f"{theme_hint}"
+            f"Составь контент-план на {period_desc} с частотой «{frequency}», начиная с {start_date.strftime('%d.%m.%Y')}.\n"
             f"Даты публикаций: {', '.join(d.strftime('%d.%m') for d in post_dates)}\n"
-            f"Для каждой даты: 1 идея поста (тип + краткое описание). Всего 10–30 идей.\n"
+            f"Для каждой даты: 1 идея поста (тип + краткое описание). Всего {num_posts} идей.\n"
             f"Формат: [дд.мм] — Тип: Краткое описание"
         )
 

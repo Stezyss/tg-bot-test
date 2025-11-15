@@ -1,70 +1,54 @@
 # main.py
-import asyncio
 import logging
 from telegram import Update
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters
+    Application, CommandHandler, MessageHandler, ContextTypes, filters
 )
 
 from config import Config
 from text_service import TextService
 from image_service import ImageService
+from attachment_service import AttachmentService
 from handlers import BotHandlers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-async def post_init(application: Application) -> None:
-    text_service = application.bot_data['text_service']
-    logger.info('Проверка подключения к YandexGPT...')
-    if text_service.check_health():
-        logger.info('YandexGPT готов!')
+async def post_init(app: Application):
+    if app.bot_data['text_service'].check_health():
+        logger.info("YandexGPT готов!")
     else:
-        logger.warning('YandexGPT недоступен — проверьте токены и доступ')
-
+        logger.warning("YandexGPT недоступен")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Ошибка бота: {context.error}")
+    logger.error(f"Ошибка: {context.error}")
     if update and hasattr(update, "effective_message"):
-        try:
-            await update.effective_message.reply_text("Произошла ошибка. Попробуйте позже.")
-        except:
-            pass
-
+        await update.effective_message.reply_text("Ошибка. Попробуйте позже.")
 
 def main():
-    try:
-        config = Config.from_env()
-    except ValueError as e:
-        logger.error(e)
-        return
-
+    config = Config.from_env()
     text_service = TextService(config)
     image_service = ImageService(config)
-    handlers = BotHandlers(text_service, image_service)
+    attachment_service = AttachmentService(config)
+    handlers = BotHandlers(text_service, image_service, attachment_service)
 
-    app = (
-        Application.builder()
-        .token(config.TELEGRAM_BOT_TOKEN)
-        .post_init(post_init)
-        .build()
-    )
-
+    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     app.bot_data['text_service'] = text_service
 
-    # Обработчики (удален CallbackQueryHandler, так как стили теперь reply buttons)
+    # Команды
     app.add_handler(CommandHandler("start", handlers.start_command))
+    app.add_handler(CommandHandler("nco_postgenerator_bot", handlers.group_start_command))
+
+    # Текст (кроме команд)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text_message))
+
+    # Фото + Документы (включая PDF, DOCX, TXT)
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handlers.handle_text_message))
+
     app.add_error_handler(error_handler)
 
-    logger.info("Бот запущен с YandexGPT + YandexART!")
+    logger.info("Бот запущен!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
-
 
 if __name__ == "__main__":
     main()
