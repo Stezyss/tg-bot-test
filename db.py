@@ -24,7 +24,7 @@ class Database:
     def save_nco_info(
         self,
         user_id: int,
-        nco_name: str = None,
+        name: str = None,
         activities: str = None,
         audience: str = None,
         website: str = None
@@ -35,7 +35,7 @@ class Database:
             (user_id, nco_name, activities, audience, website)
             VALUES (?, ?, ?, ?, ?)
             ''',
-            (user_id, nco_name, activities, audience, website)
+            (user_id, name, activities, audience, website)
         )
         self.conn.commit()
 
