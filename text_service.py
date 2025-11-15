@@ -14,7 +14,7 @@ class TextService:
         self.sdk.setup_default_logging()
 
         self.model = self.sdk.models.completions('yandexgpt')
-        self.model = self.model.configure(temperature=0.7, max_tokens=700)
+        self.model = self.model.configure(temperature=0.7, max_tokens=1500)
 
         self.system_prompt = config.AI_SYSTEM_PROMPT
 

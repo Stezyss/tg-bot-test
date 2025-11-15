@@ -72,7 +72,7 @@ def main():
                 context.user_data['text_prompt'] = content
                 context.user_data['waiting'] = 'select_style'
                 from handlers.handlers_text_create import style_kb
-                await update.message.reply_text("Готово!\n\nВыбери стиль для поста:", reply_markup=style_kb, **reply_kwargs)
+                await update.message.reply_text("Выбери стиль для поста:", reply_markup=style_kb, **reply_kwargs)
             else:
                 await update.message.reply_text("Не удалось извлечь текст.", reply_markup=get_main_keyboard(True), **reply_kwargs)
             return
