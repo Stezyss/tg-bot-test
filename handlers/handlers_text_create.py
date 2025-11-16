@@ -14,7 +14,7 @@ post_type_kb = ReplyKeyboardMarkup([
 ], resize_keyboard=True)
 
 style_kb = ReplyKeyboardMarkup([
-    ["Разговорный", "Официальный"],
+    ["Разговорный", "Официально-деловой"],
     ["Художественный", "Без стиля"],
     ["Назад"]
 ], resize_keyboard=True)
@@ -79,8 +79,14 @@ class TextCreateHandler:
             context.user_data['post_type'] = text
             context.user_data['waiting'] = 'text_prompt'
             await update.message.reply_text(
-                f"Тип: *{text}*.\n\n"
-                "Теперь опиши детали поста:",
+                f"Тип: *{text}*.\n"
+                "Теперь расскажи подробнее о посте!\n\n"
+                "Напиши, например:\n"
+                "— как называется событие,\n"
+                "— когда и где оно пройдёт,\n"
+                "— кого вы приглашаете,\n"
+                "— и всё остальное, что хочешь добавить.\n\n"
+                "Чем подробнее — тем лучше!",
                 reply_markup=BACK_SIMPLE,
                 parse_mode='Markdown',
                 **kw
@@ -125,7 +131,7 @@ class TextCreateHandler:
                 )
                 return True
 
-            styles = {"Разговорный": "разговорный", "Официальный": "официальный",
+            styles = {"Разговорный": "разговорный", "Официально-деловой": "официально-деловой",
                       "Художественный": "художественный", "Без стиля": None}
             if text in styles:
                 await update.message.reply_text("Пишу текст... Секунду!", **kw)
