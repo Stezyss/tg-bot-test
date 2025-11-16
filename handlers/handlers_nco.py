@@ -17,20 +17,20 @@ def clean_url(text: str) -> str:
 # ── КЛАВИАТУРЫ ───────────────────────────────────────────────────────
 def get_main_keyboard(has_data: bool) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([
-        ["Генерация текста", "Генерация изображения"],
-        ["Редактор текста", "Контент-план"],
-        ["Просмотреть информацию об НКО" if has_data else "Предоставить информацию об НКО"]
+        ["📝 Генерация текста", "🎨 Генерация изображения"],
+        ["✏️ Редактор текста", "📅 Контент-план"],
+        ["👁️ Просмотреть информацию об НКО" if has_data else "➕ Предоставить информацию об НКО"]
     ], resize_keyboard=True)
 
 
 def get_view_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Изменить информацию об НКО", callback_data="edit_nco")
+        InlineKeyboardButton("✏️ Изменить информацию об НКО", callback_data="edit_nco")
     ]])
 
 
-back_skip_clear = ReplyKeyboardMarkup([["Пропустить", "Очистить"], ["Назад в главное меню"]], resize_keyboard=True)
-back_skip_only = ReplyKeyboardMarkup([["Пропустить"], ["Назад в главное меню"]], resize_keyboard=True)
+back_skip_clear = ReplyKeyboardMarkup([["⏭️ Пропустить", "🧹 Очистить"], ["🏠 Назад в главное меню"]], resize_keyboard=True)
+back_skip_only = ReplyKeyboardMarkup([["⏭️ Пропустить"], ["🏠 Назад в главное меню"]], resize_keyboard=True)
 
 
 class NCOHandler:
@@ -109,10 +109,10 @@ class NCOHandler:
         user_id = update.effective_user.id
 
         # ── КНОПКИ: ПРЕДОСТАВИТЬ / ПРОСМОТРЕТЬ ───────────────────────
-        if text == "Предоставить информацию об НКО":
+        if text == "➕ Предоставить информацию об НКО":
             return await self.start_nco_input(update, context, is_edit=False, **kw)
 
-        if text == "Просмотреть информацию об НКО":
+        if text == "👁️ Просмотреть информацию об НКО":
             return await self.show_nco_info(update, context, **kw)
 
         # ── РЕДАКТИРОВАНИЕ ПОЛЕЙ ─────────────────────────────────────
@@ -127,16 +127,16 @@ class NCOHandler:
             field, next_step, next_label = steps[waiting]
 
             # ← СПЕЦИАЛЬНО: "Назад" при вводе названия → в главное меню
-            if text == "Назад" and waiting == 'nco_name':
+            if text == "⬅️ Назад" and waiting == 'nco_name':
                 context.user_data['waiting'] = None
                 context.user_data.pop('is_edit_mode', None)
                 has_data = self._has_data(user_id)
                 await update.message.reply_text("👌 Возврат в главное меню.", reply_markup=get_main_keyboard(has_data), **kw)
                 return True
 
-            if text == "Пропустить":
+            if text == "⏭️ Пропустить":
                 value = self._get(user_id)[field]
-            elif text == "Очистить" and context.user_data.get('is_edit_mode'):
+            elif text == "🧹 Очистить" and context.user_data.get('is_edit_mode'):
                 value = ""
             else:
                 value = text.strip()

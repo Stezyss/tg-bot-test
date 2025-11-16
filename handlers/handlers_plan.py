@@ -5,27 +5,27 @@ from datetime import datetime, timedelta
 
 # === Клавиатуры ===
 period_kb = ReplyKeyboardMarkup([
-    ["Неделя", "Месяц"],
-    ["Ввести свой период"],
-    ["Назад"]
+    ["📅 Неделя", "📆 Месяц"],
+    ["✏️ Ввести свой период"],
+    ["⬅️ Назад"]
 ], resize_keyboard=True)
 
 # Частота для недели — сетка 2×2
 freq_week = ReplyKeyboardMarkup([
-    ["1 раз в день", "1 раз в неделю"],
-    ["2 раза в неделю", "3 раза в неделю"],
-    ["Назад"]
+    ["📅 1 раз в день", "📅 1 раз в неделю"],
+    ["📅 2 раза в неделю", "📅 3 раза в неделю"],
+    ["⬅️ Назад"]
 ], resize_keyboard=True)
 
 # Частота для месяца
 freq_month = ReplyKeyboardMarkup([
-    ["1 раз в день", "1 раз в неделю"],
-    ["2 раза в неделю", "3 раза в неделю"],
-    ["2 раза в месяц"],
-    ["Назад"]
+    ["📅 1 раз в день", "📅 1 раз в неделю"],
+    ["📅 2 раза в неделю", "📅 3 раза в неделю"],
+    ["📅 2 раза в месяц"],
+    ["⬅️ Назад"]
 ], resize_keyboard=True)
 
-BACK_TO_MAIN = ReplyKeyboardMarkup([["Назад в главное меню"]], resize_keyboard=True)
+BACK_TO_MAIN = ReplyKeyboardMarkup([["🏠 Назад в главное меню"]], resize_keyboard=True)
 
 
 class PlanHandler:
@@ -53,7 +53,7 @@ class PlanHandler:
 
         # === Тема ===
         if w == 'plan_theme':
-            if text == "Назад в главное меню":
+            if text == "🏠 Назад в главное меню":
                 context.user_data.clear()
                 from .handlers_nco import get_main_keyboard
                 await update.message.reply_text("👌 Хорошо, возвращаемся в главное меню. Если понадобится контент-план — просто скажи!", reply_markup=get_main_keyboard(True), **kw)
@@ -71,15 +71,15 @@ class PlanHandler:
 
         # === Период ===
         if w == 'plan_period':
-            if text == "Назад":
+            if text == "⬅️ Назад":
                 context.user_data['waiting'] = 'plan_theme'
                 await update.message.reply_text("👌 Хорошо, вернёмся к теме контент-плана.", reply_markup=BACK_TO_MAIN, parse_mode='Markdown', **kw)
                 return True
 
-            periods = {"Неделя": "неделя", "Месяц": "месяц"}
+            periods = {"📅 Неделя": "неделя", "📆 Месяц": "месяц"}
             if text in periods:
                 context.user_data.update({'plan_period': periods[text], 'waiting': 'plan_freq'})
-                kb = freq_week if text == "Неделя" else freq_month
+                kb = freq_week if text == "📅 Неделя" else freq_month
                 await update.message.reply_text(
                     f"📅 Период: *{text}*\n\n"
                     "Теперь выбери *частоту публикаций* — как часто ты хочешь публиковать посты:",
@@ -87,13 +87,13 @@ class PlanHandler:
                     parse_mode='Markdown',
                     **kw
                 )
-            elif text == "Ввести свой период":
+            elif text == "✏️ Ввести свой период":
                 context.user_data['waiting'] = 'plan_start'
                 await update.message.reply_text(
                     "📅 Отлично! Введи *начало* периода в формате ДД.ММ.ГГГГ\n\n"
                     "✨ *Пример:* 01.12.2025\n\n"
-                    "Или нажми «Пропустить», чтобы начать с сегодняшнего дня.",
-                    reply_markup=ReplyKeyboardMarkup([["Пропустить", "Назад"]], resize_keyboard=True),
+                    "Или нажми «⏭️ Пропустить», чтобы начать с сегодняшнего дня.",
+                    reply_markup=ReplyKeyboardMarkup([["⏭️ Пропустить", "⬅️ Назад"]], resize_keyboard=True),
                     parse_mode='Markdown',
                     **kw
                 )
@@ -101,18 +101,18 @@ class PlanHandler:
 
         # === Начало (custom) ===
         if w == 'plan_start':
-            if text == "Назад":
+            if text == "⬅️ Назад":
                 context.user_data['waiting'] = 'plan_period'
                 await update.message.reply_text("👌 Хорошо, вернёмся к выбору периода.", reply_markup=period_kb, parse_mode='Markdown', **kw)
                 return True
 
-            start = datetime.now().date() if text == "Пропустить" else datetime.strptime(text, "%d.%m.%Y").date()
+            start = datetime.now().date() if text == "⏭️ Пропустить" else datetime.strptime(text, "%d.%m.%Y").date()
             context.user_data.update({'plan_start': start, 'waiting': 'plan_end'})
             await update.message.reply_text(
                 f"✅ Начало: *{start.strftime('%d.%m.%Y')}*\n\n"
                 "Теперь введи *конец* периода в формате ДД.ММ.ГГГГ\n\n"
                 "✨ *Пример:* 30.12.2025",
-                reply_markup=ReplyKeyboardMarkup([["Назад"]], resize_keyboard=True),
+                reply_markup=ReplyKeyboardMarkup([["⬅️ Назад"]], resize_keyboard=True),
                 parse_mode='Markdown',
                 **kw
             )
@@ -120,9 +120,9 @@ class PlanHandler:
 
         # === Конец (custom) ===
         if w == 'plan_end':
-            if text == "Назад":
+            if text == "⬅️ Назад":
                 context.user_data['waiting'] = 'plan_start'
-                await update.message.reply_text("👌 Хорошо, вернёмся к дате начала.", reply_markup=ReplyKeyboardMarkup([["Пропустить", "Назад"]], resize_keyboard=True), parse_mode='Markdown', **kw)
+                await update.message.reply_text("👌 Хорошо, вернёмся к дате начала.", reply_markup=ReplyKeyboardMarkup([["⏭️ Пропустить", "⬅️ Назад"]], resize_keyboard=True), parse_mode='Markdown', **kw)
                 return True
 
             try:
@@ -145,11 +145,11 @@ class PlanHandler:
 
         # === Частота ===
         if w == 'plan_freq':
-            if text == "Назад":
+            if text == "⬅️ Назад":
                 period = context.user_data.get('plan_period')
                 if period == 'custom':
                     context.user_data['waiting'] = 'plan_end'
-                    await update.message.reply_text("👌 Хорошо, вернёмся к дате конца периода.", reply_markup=ReplyKeyboardMarkup([["Назад"]], resize_keyboard=True), parse_mode='Markdown', **kw)
+                    await update.message.reply_text("👌 Хорошо, вернёмся к дате конца периода.", reply_markup=ReplyKeyboardMarkup([["⬅️ Назад"]], resize_keyboard=True), parse_mode='Markdown', **kw)
                 else:
                     context.user_data['waiting'] = 'plan_period'
                     await update.message.reply_text("👌 Хорошо, вернёмся к выбору периода.", reply_markup=period_kb, parse_mode='Markdown', **kw)

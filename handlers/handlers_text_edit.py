@@ -3,19 +3,19 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 action_kb = ReplyKeyboardMarkup([
-    ["Увеличить текст", "Сократи текст"],
-    ["Исправить ошибки", "Изменить стиль"],
-    ["Перефразировать"],
-    ["Назад"]
+    ["📈 Увеличить текст", "📉 Сократи текст"],
+    ["✅ Исправить ошибки", "🎨 Изменить стиль"],
+    ["🔄 Перефразировать"],
+    ["⬅️ Назад"]
 ], resize_keyboard=True)
 
 style_kb = ReplyKeyboardMarkup([
-    ["Разговорный", "Официальный"],
-    ["Художественный", "Без стиля"],
-    ["Назад"]
+    ["💬 Разговорный", "📋 Официальный"],
+    ["🎨 Художественный", "⚪ Без стиля"],
+    ["⬅️ Назад"]
 ], resize_keyboard=True)
 
-BACK_TO_MAIN = ReplyKeyboardMarkup([["Назад в главное меню"]], resize_keyboard=True)
+BACK_TO_MAIN = ReplyKeyboardMarkup([["🏠 Назад в главное меню"]], resize_keyboard=True)
 
 
 class TextEditHandler:
@@ -38,7 +38,7 @@ class TextEditHandler:
         w = context.user_data.get('waiting')
 
         if w == 'edit_text':
-            if text == "Назад в главное меню":
+            if text == "🏠 Назад в главное меню":
                 context.user_data.clear()
                 from .handlers_nco import get_main_keyboard
                 await update.message.reply_text("👌 Хорошо, возвращаемся в главное меню. Если текст нужно доработать — просто пришли!", reply_markup=get_main_keyboard(True), **kw)
@@ -56,12 +56,12 @@ class TextEditHandler:
             return True
 
         if w == 'edit_action':
-            if text == "Назад":
+            if text == "⬅️ Назад":
                 context.user_data['waiting'] = 'edit_text'
                 await update.message.reply_text("👌 Хорошо, пришли новый текст для редактирования или подтверди старый.", reply_markup=BACK_TO_MAIN, parse_mode='Markdown', **kw)
                 return True
 
-            if text == "Изменить стиль":
+            if text == "🎨 Изменить стиль":
                 context.user_data['waiting'] = 'edit_style'
                 await update.message.reply_text("🎨 Выбери новый стиль для текста:", reply_markup=style_kb, parse_mode='Markdown', **kw)
             else:
@@ -73,12 +73,12 @@ class TextEditHandler:
             return True
 
         if w == 'edit_style':
-            if text == "Назад":
+            if text == "⬅️ Назад":
                 context.user_data['waiting'] = 'edit_action'
                 await update.message.reply_text("👌 Хорошо, вернёмся к выбору действия.", reply_markup=action_kb, parse_mode='Markdown', **kw)
                 return True
 
-            styles = {"Разговорный": "разговорный", "Официальный": "официальный", "Художественный": "художественный", "Без стиля": None}
+            styles = {"💬 Разговорный": "разговорный", "📋 Официальный": "официальный", "🎨 Художественный": "художественный", "⚪ Без стиля": None}
             if text in styles:
                 await update.message.reply_text("🎨 Меняю стиль... ⏳", **kw)
                 result = self.ts.edit_text_with_action(context.user_data['edit_text'], "Изменить стиль", nco_info, styles[text])
