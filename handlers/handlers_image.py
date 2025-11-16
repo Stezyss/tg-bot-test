@@ -73,7 +73,7 @@ class ImageHandler:
             }
 
             if text in styles:
-                await update.message.reply_text("Генерирую... Это займёт 10–20 секунд!", **kw)
+                await update.message.reply_text("Генерирую... Это займёт не более минуты!", **kw)
                 img = await self.isvc.generate_image(context.user_data['image_prompt'], nco_info, styles[text])
                 from .handlers_nco import get_main_keyboard
                 if img:

@@ -79,7 +79,7 @@ class TextEditHandler:
 
             styles = {"Разговорный": "разговорный", "Официальный": "официальный", "Художественный": "художественный", "Без стиля": None}
             if text in styles:
-                await update.message.reply_text("Меняю стиль... Готово!", **kw)
+                await update.message.reply_text("Меняю стиль...", **kw)
                 result = self.ts.edit_text_with_action(context.user_data['edit_text'], "Изменить стиль", nco_info, styles[text])
                 from .handlers_nco import get_main_keyboard
                 await update.message.reply_text(f"Готово!\n\n{result}", reply_markup=get_main_keyboard(True), **kw)
