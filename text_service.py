@@ -3,6 +3,7 @@ from yandex_cloud_ml_sdk import YCloudML
 from typing import Optional
 from datetime import datetime, timedelta
 from config import Config
+import re
 
 
 class TextService:
@@ -67,33 +68,62 @@ class TextService:
         if start_date is None:
             start_date = datetime.now().date()
 
+        # Определяем диапазон и общее количество дней
         if period == "неделя":
             end_date = start_date + timedelta(days=6)
-            days = 7
+            total_days = 7
         elif period == "месяц":
             end_date = start_date + timedelta(days=29)
-            days = 30
+            total_days = 30
         elif period == "custom":
             if end_date is None:
                 raise ValueError("Для custom периода требуется end_date")
-            days = (end_date - start_date).days + 1
+            total_days = (end_date - start_date).days + 1
         else:
             raise ValueError("Неверный период")
 
-        interval_map = {
-            "1 раз в день": 1,
-            "2 раза в неделю": 3.5,
-            "3 раза в неделю": 2.33,
-            "1 раз в неделю": 7,
-            "2 раза в месяц": 15
-        }
-        interval = interval_map.get(frequency, 7)
+        # НОРМАЛИЗАЦИЯ частоты — теперь работает при любом мусоре в строке
+        freq_lower = frequency.lower().strip()
+        freq_clean = re.sub(r'[^\w\s]', '', freq_lower)  # убираем эмодзи, галочки и т.п.
 
-        num_posts = max(1, int(days / interval))
-        if num_posts > 30:
-            num_posts = 30
-        step = days / num_posts if num_posts > 0 else 1
-        post_dates = [start_date + timedelta(days=int(i * step)) for i in range(num_posts)]
+        if "1 раз в день" in freq_clean:
+            normalized = "1 раз в день"
+        elif "1 раз в неделю" in freq_clean:
+            normalized = "1 раз в неделю"
+        elif "2 раза в неделю" in freq_clean or "2 раза в неделю" in freq_clean:
+            normalized = "2 раза в неделю"
+        elif "3 раза в неделю" in freq_clean or "3 раза в неделю" in freq_clean:
+            normalized = "3 раза в неделю"
+        elif "2 раза в месяц" in freq_clean:
+            normalized = "2 раза в месяц"
+        else:
+            normalized = "1 раз в неделю"  # безопасный дефолт
+
+        # ТОЧНЫЙ расчёт количества постов
+        if normalized == "1 раз в день":
+            num_posts = total_days
+        elif normalized == "1 раз в неделю":
+            num_posts = max(1, (total_days + 6) // 7)
+        elif normalized == "2 раза в неделю":
+            num_posts = max(1, (total_days * 2 + 6) // 7)
+        elif normalized == "3 раза в неделю":
+            num_posts = max(1, (total_days * 3 + 6) // 7)
+        elif normalized == "2 раза в месяц":
+            num_posts = 2
+        else:
+            num_posts = 4
+
+        num_posts = min(num_posts, 60)
+
+        # Равномерно распределяем даты
+        if num_posts == 1:
+            post_dates = [start_date]
+        else:
+            step = (total_days - 1) / (num_posts - 1) if num_posts > 1 else 0
+            post_dates = [
+                start_date + timedelta(days=round(i * step))
+                for i in range(num_posts)
+            ]
 
         context = ""
         if nco_info and any(nco_info.values()):
@@ -107,11 +137,12 @@ class TextService:
 
         theme_hint = f"Тема: {theme}\n" if theme else ""
         period_desc = period if period != "custom" else f"с {start_date.strftime('%d.%m.%Y')} по {end_date.strftime('%d.%m.%Y')}"
+
         prompt = (
             f"{self.system_prompt}\n\n"
             f"{context}"
             f"{theme_hint}"
-            f"Составь контент-план на {period_desc} с частотой «{frequency}», начиная с {start_date.strftime('%d.%m.%Y')}.\n"
+            f"Составь контент-план на {period_desc} с частотой «{normalized}», начиная с {start_date.strftime('%d.%m.%Y')}.\n"
             f"Даты публикаций: {', '.join(d.strftime('%d.%m') for d in post_dates)}\n"
             f"Для каждой даты: 1 идея поста (тип + краткое описание). Всего {num_posts} идей.\n"
             f"Формат: [дд.мм] — Тип: Краткое описание (1-2 предложения)"
