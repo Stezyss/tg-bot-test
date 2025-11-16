@@ -1,3 +1,4 @@
+# main.py
 import logging
 import asyncio
 from telegram import Update
@@ -62,7 +63,7 @@ def main():
         # ── ГРУППА ────────────────────────────────────────────
         if chat.type in ["group", "supergroup"]:
             await update.message.reply_text(
-                "Привет! Я помогу создавать посты и картинки для НКО.\n\n"
+                "👋 Привет! Я помогу создавать посты и картинки для НКО.\n\n"
                 "Для дальнейшей работы с ботом используй /nco_postgenerator_bot"
             )
             return
@@ -75,9 +76,9 @@ def main():
         context.user_data.clear()
         has_data = nco.has_data(user_id)
         await update.message.reply_text(
-            "Привет! Я помогу создавать посты и картинки для НКО.\n\n"
-            "Загрузи фото или документ — я извлеку текст и сделаю пост!\n"
-            "Или выбери действие ниже.",
+            "👋 Привет! Я твой помощник по созданию контента для НКО.\n\n"
+            "📸 Можешь загрузить фото или документ — я извлеку текст и сделаю пост!\n"
+            "✨ Или выбери действие из меню ниже.",
             reply_markup=get_main_keyboard(has_data)
         )
 
@@ -89,7 +90,7 @@ def main():
         chat = update.effective_chat
 
         if chat.type not in ["group", "supergroup"]:
-            await update.message.reply_text("Эта команда используется только в группе.")
+            await update.message.reply_text("❌ Эта команда используется только в группе.")
             return
 
         user = update.effective_user
@@ -97,7 +98,7 @@ def main():
         context.user_data['session_user_id'] = user.id
 
         await update.message.reply_text(
-            f"{user.first_name}, я готов работать! Отправь фото, текст или выбери действие.",
+            f"👋 {user.first_name}, я готов работать! Отправь фото, текст или выбери действие.",
             reply_to_message_id=update.message.message_id
         )
 
@@ -134,14 +135,14 @@ def main():
 
                 if waiting.startswith('image_'):
                     await update.message.reply_text(
-                        "В генерации изображений не поддерживается загрузка файлов.",
+                        "❌ В генерации изображений не поддерживается загрузка файлов.",
                         **reply_kwargs
                     )
                     return
 
                 if waiting.startswith('plan_'):
                     await update.message.reply_text(
-                        "Работа с файлами не поддерживается.",
+                        "❌ Работа с файлами в контент-плане не поддерживается.",
                         **reply_kwargs
                     )
                     context.user_data['waiting'] = 'plan_theme'
@@ -151,14 +152,14 @@ def main():
                     return
 
                 if waiting == 'edit_text':
-                    await update.message.reply_text("Анализирую вложение...", **reply_kwargs)
+                    await update.message.reply_text("📄 Анализирую вложение...", **reply_kwargs)
                     content = await att.process_attachment(update.message)
                     if content and content.strip():
                         context.user_data['original_text'] = content
                         context.user_data['waiting'] = 'edit_style'
                         from telegram import ReplyKeyboardMarkup
                         await update.message.reply_text(
-                            "Текст извлечён! Выбери стиль редактирования:",
+                            "✅ Текст извлечён! Выбери стиль редактирования:",
                             reply_markup=ReplyKeyboardMarkup([
                                 ["Сделать короче", "Сделать длиннее"],
                                 ["Сделать формальнее", "Сделать проще"],
@@ -168,24 +169,24 @@ def main():
                             **reply_kwargs
                         )
                     else:
-                        await update.message.reply_text("Не удалось извлечь текст.", **reply_kwargs)
+                        await update.message.reply_text("❌ Не удалось извлечь текст из файла.", **reply_kwargs)
                     return
 
                 # Текст из вложения → генератор текста
                 if not waiting or waiting.startswith('text_') or waiting == 'select_style':
-                    await update.message.reply_text("Анализирую вложение...", **reply_kwargs)
+                    await update.message.reply_text("📄 Анализирую вложение...", **reply_kwargs)
                     content = await att.process_attachment(update.message)
                     if content and content.strip():
                         context.user_data.update({'text_prompt': content, 'waiting': 'select_style'})
                         from handlers.handlers_text_create import style_kb
                         await update.message.reply_text(
-                            "Готово!\n\nВыбери стиль для поста:",
+                            "✅ Готово! Текст извлечён.\n\nВыбери стиль для поста:",
                             reply_markup=style_kb,
                             **reply_kwargs
                         )
                     else:
                         await update.message.reply_text(
-                            "Не удалось извлечь текст.",
+                            "❌ Не удалось извлечь текст из файла.",
                             reply_markup=get_main_keyboard(True),
                             **reply_kwargs
                         )
@@ -201,7 +202,7 @@ def main():
             if text == "Назад в главное меню":
                 context.user_data.clear()
                 has_data = nco.has_data(user_id)
-                await update.message.reply_text("Готово.", reply_markup=get_main_keyboard(has_data), **kw)
+                await update.message.reply_text("👌 Возврат в главное меню.", reply_markup=get_main_keyboard(has_data), **kw)
                 return
 
             if text in ["Назад в главное меню", "Пропустить", "Очистить"] and not context.user_data.get('waiting'):
@@ -244,7 +245,7 @@ def main():
                 return
 
             has_data = nco.has_data(user_id)
-            await update.message.reply_text("Выбери действие:", reply_markup=get_main_keyboard(has_data), **kw)
+            await update.message.reply_text("👋 Выбери действие из меню:", reply_markup=get_main_keyboard(has_data), **kw)
 
     # ───────────────────────────────────────────────────────────────
     # РЕГИСТРАЦИЯ ХЕНДЛЕРОВ
@@ -257,7 +258,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle))
     app.add_error_handler(error_handler)
 
-    logger.info("Бот запущен")
+    logger.info("✅ Бот запущен и готов к работе!")
     app.run_polling()
 
 

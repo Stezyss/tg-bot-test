@@ -69,14 +69,14 @@ class NCOHandler:
             context.user_data['waiting'] = None
             context.user_data.pop('is_edit_mode', None)
             has_data = self._has_data(user_id)
-            await update.message.reply_text("Готово.", reply_markup=get_main_keyboard(has_data), **kw)
+            await update.message.reply_text("✅ Отлично! Всё сохранено.", reply_markup=get_main_keyboard(has_data), **kw)
 
     async def start_nco_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = False, **kw):
         context.user_data['waiting'] = 'nco_name'
         context.user_data['is_edit_mode'] = is_edit
-        text = "Введите новые данные.\n\nНазвание НКО:" if is_edit else "Название НКО:"
+        text = "📝 Введите новые данные об НКО\n\n*Название НКО:*" if is_edit else "👋 Давай заполним информацию о твоей НКО!\n\nЭто поможет мне создавать более подходящие посты и картинки.\n\n*Начнём с названия НКО:*"
         markup = back_skip_clear if is_edit else back_skip_only
-        await update.message.reply_text(text, reply_markup=markup, **kw)
+        await update.message.reply_text(text, reply_markup=markup, parse_mode='Markdown', **kw)
 
     async def show_nco_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kw):
         user_id = update.effective_user.id
@@ -91,8 +91,8 @@ class NCOHandler:
             value = info[key].strip()
             if key == 'website' and value:
                 value = clean_url(value)
-            lines.append(f"• {label}: {value if value else '—'}")
-        text = "Информация об НКО:\n\n" + "\n".join(lines)
+            lines.append(f"• *{label}:* {value if value else '—'}")
+        text = "📋 *Информация о вашей НКО:*\n\n" + "\n".join(lines)
 
         context.user_data.pop('waiting', None)
         context.user_data.pop('is_edit_mode', None)
@@ -100,6 +100,7 @@ class NCOHandler:
         await update.message.reply_text(
             text,
             reply_markup=get_view_keyboard(),
+            parse_mode='Markdown',
             **kw
         )
 
@@ -116,9 +117,9 @@ class NCOHandler:
 
         # ── РЕДАКТИРОВАНИЕ ПОЛЕЙ ─────────────────────────────────────
         steps = {
-            'nco_name': ('name', 'nco_activities', "Деятельность НКО"),
-            'nco_activities': ('activities', 'nco_audience', "Целевая аудитория"),
-            'nco_audience': ('audience', 'nco_website', "Сайт НКО"),
+            'nco_name': ('name', 'nco_activities', "📝 *Деятельность НКО:*\n\nЧем занимается ваша организация? Опишите основные направления работы."),
+            'nco_activities': ('activities', 'nco_audience', "🎯 *Целевая аудитория:*\n\nДля кого вы работаете? Кто ваши благополучатели, волонтёры, партнёры?"),
+            'nco_audience': ('audience', 'nco_website', "🌐 *Сайт НКО:*\n\nУкажите адрес сайта (если есть). Можно пропустить."),
             'nco_website': ('website', None, None)
         }
 
@@ -130,7 +131,7 @@ class NCOHandler:
                 context.user_data['waiting'] = None
                 context.user_data.pop('is_edit_mode', None)
                 has_data = self._has_data(user_id)
-                await update.message.reply_text("Готово.", reply_markup=get_main_keyboard(has_data), **kw)
+                await update.message.reply_text("👌 Возврат в главное меню.", reply_markup=get_main_keyboard(has_data), **kw)
                 return True
 
             if text == "Пропустить":
@@ -154,8 +155,9 @@ class NCOHandler:
             context.user_data['waiting'] = 'nco_name'
             context.user_data['is_edit_mode'] = True
             await query.message.reply_text(
-                "Введите новые данные.\n\nНазвание НКО:",
-                reply_markup=back_skip_clear
+                "📝 Введите новые данные об НКО\n\n*Название НКО:*",
+                reply_markup=back_skip_clear,
+                parse_mode='Markdown'
             )
 
     async def back(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kw):
@@ -167,13 +169,13 @@ class NCOHandler:
                 'nco_website': 'nco_audience'
             }[waiting]
             label = {
-                'nco_name': "Название НКО",
-                'nco_activities': "Деятельность НКО",
-                'nco_audience': "Целевая аудитория"
+                'nco_name': "👤 *Название НКО:*",
+                'nco_activities': "📝 *Деятельность НКО:*",
+                'nco_audience': "🎯 *Целевая аудитория:*"
             }[prev]
             context.user_data['waiting'] = prev
             markup = back_skip_clear if context.user_data.get('is_edit_mode') else back_skip_only
-            await update.message.reply_text(f"{label}:", reply_markup=markup, **kw)
+            await update.message.reply_text(f"{label}", reply_markup=markup, parse_mode='Markdown', **kw)
             return True
         return False
 
