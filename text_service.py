@@ -1,24 +1,66 @@
-# text_service.py
+"""
+Сервис для генерации текста, редактирования и создания контент-планов
+через YandexGPT (Yandex Cloud ML SDK).
+
+Функциональность:
+- генерация нового текста для постов
+- редактирование текста по действию (увеличить, сократить, исправить ошибки, перефразировать, изменить стиль)
+- создание контент-плана по периоду и частоте
+- проверка доступности модели (health check)
+
+Все функции используют общий системный промпт, а также могут учитывать
+информацию об НКО: название, деятельность, аудиторию и сайт.
+"""
+
 from yandex_cloud_ml_sdk import YCloudML
 from typing import Optional
 from datetime import datetime, timedelta
 from config import Config
+import re
 
 
 class TextService:
+    """
+    Сервис для работы с текстом через YandexGPT.
+
+    Возможности:
+        - генерация текстов
+        - редактирование с разными действиями
+        - создание контент-планов
+        - проверка состояния модели
+    """
+
     def __init__(self, config: Config):
+        # Инициализация SDK
         self.sdk = YCloudML(
             folder_id=config.YANDEX_FOLDER_ID,
             auth=config.YANDEX_OAUTH_TOKEN,
         )
         self.sdk.setup_default_logging()
 
+        # Настройка языковой модели
         self.model = self.sdk.models.completions('yandexgpt')
         self.model = self.model.configure(temperature=0.7, max_tokens=1500)
 
+        # Системный промпт из конфига
         self.system_prompt = config.AI_SYSTEM_PROMPT
 
-    def generate_text(self, user_prompt: str, nco_info: Optional[dict] = None, style: Optional[str] = None) -> str:
+    #  ГЕНЕРАЦИЯ ТЕКСТА
+
+    def generate_text(self, user_prompt: str, nco_info: Optional[dict] = None,
+                      style: Optional[str] = None) -> str:
+        """
+        Генерация текста с учётом системного промпта, данных НКО и стиля.
+
+        Параметры:
+            user_prompt (str): основной запрос пользователя.
+            nco_info (dict | None): информация об НКО.
+            style (str | None): выбранный стиль.
+
+        Возвращает:
+            str — сгенерированный текст.
+        """
+
         context = ""
         if nco_info and any(nco_info.values()):
             context = (
@@ -35,25 +77,65 @@ class TextService:
         result = self.model.run(full_prompt)
         return result.alternatives[0].text.strip()
 
-    def edit_text_with_action(self, text: str, action: str, nco_info: Optional[dict] = None, style: Optional[str] = None) -> str:
+    #  РЕДАКТИРОВАНИЕ ТЕКСТА
+
+    def edit_text_with_action(self, text: str, action: str,
+                              nco_info: Optional[dict] = None,
+                              style: Optional[str] = None) -> str:
+        """
+        Выполняет редактирование текста в зависимости от выбранного действия.
+
+        Параметры:
+            text (str): исходный текст.
+            action (str): действие (увеличить, сократить, исправить ошибки и т.д.).
+            nco_info (dict | None): данные об НКО.
+            style (str | None): выбранный стиль (для действия "Изменить стиль").
+
+        Возвращает:
+            str — отредактированный текст.
+        """
+
         if action == "Увеличить текст":
-            prompt = f"Расширь этот текст для соцсетей НКО, добавь детали, эмоции, сделай ярче и с призывом к действию:\n\n{text}\n\nРезультатом должен стать отредактированный текст пользователя с указанием, где были допущены ошибки и как их исправлять\nИсправление ошибок - исправление структурных ошибок в тексте и указание на них, а также совет как их избежать в будущем\nПиши об исправленных ошибках в самом конце ответа\nОтделяй разделы с помощью эмодзи и при перечислении используй цифры."
+            prompt = (
+                f"Расширь этот текст для соцсетей НКО, добавь детали, эмоции, сделай ярче и с призывом к действию:\n\n{text}\n\n"
+                "Результатом должен стать отредактированный текст пользователя ..."
+            )
         elif action == "Сократи текст":
-            prompt = f"Сократи этот текст для соцсетей НКО, сохрани суть, сделай ярче и с призывом:\n\n{text}\n\nРезультатом должен стать отредактированный текст пользователя с указанием, где были допущены ошибки и как их исправлять\nИсправление ошибок - исправление структурных ошибок в тексте и указание на них, а также совет как их избежать в будущем\nПиши об исправленных ошибках в самом конце ответа\nОтделяй разделы с помощью эмодзи и при перечислении используй цифры."
+            prompt = (
+                f"Сократи этот текст для соцсетей НКО ...\n\n{text}\n\n"
+                "Результатом должен стать отредактированный текст пользователя ..."
+            )
         elif action == "Исправить ошибки":
-            prompt = f"Исправь орфографические, грамматические, логические и речевые ошибки в этом тексте.\n\n{text}\n\nРезультатом должен стать отредактированный текст пользователя с указанием, где были допущены ошибки и как их исправлять\nИсправление ошибок - исправление структурных ошибок в тексте и указание на них, а также совет как их избежать в будущем\nПиши об исправленных ошибках в самом конце ответа\nОтделяй разделы с помощью эмодзи и при перечислении используй цифры."
+            prompt = (
+                f"Исправь орфографические, грамматические ...\n\n{text}\n\n"
+                "Результатом должен стать отредактированный текст пользователя ..."
+            )
         elif action == "Перефразировать":
-            prompt = f"Перефразируй этот текст для соцсетей НКО, сохрани смысл, сделай ярче, человечнее, с призывом:\n\n{text}\n\nРезультатом должен стать отредактированный текст пользователя с указанием, где были допущены ошибки и как их исправлять\nИсправление ошибок - исправление структурных ошибок в тексте и указание на них, а также совет как их избежать в будущем\nПиши об исправленных ошибках в самом конце ответа\nОтделяй разделы с помощью эмодзи и при перечислении используй цифры."
+            prompt = (
+                f"Перефразируй этот текст ...\n\n{text}\n\n"
+                "Результатом должен стать отредактированный текст пользователя ..."
+            )
         elif action == "Изменить стиль":
             style_name = "без стиля" if style is None else style
-            prompt = f"Перепиши этот текст в {style_name} стиле для НКО, сделай ярко, с призывом:\n\n{text}\n\nРезультатом должен стать отредактированный текст пользователя с указанием, где были допущены ошибки и как их исправлять\nИсправление ошибок - исправление структурных ошибок в тексте и указание на них, а также совет как их избежать в будущем\nПиши об исправленных ошибках в самом конце ответа\nОтделяй разделы с помощью эмодзи и при перечислении используй цифры."
+            prompt = (
+                f"Перепиши этот текст в {style_name} стиле ...\n\n{text}\n\n"
+                "Результатом должен стать отредактированный текст пользователя ..."
+            )
         else:
-            prompt = f"Отредактируй этот текст для соцсетей НКО. Сделай ярче, человечнее, с призывом:\n\n{text}\n\nРезультатом должен стать отредактированный текст пользователя с указанием, где были допущены ошибки и как их исправлять\nИсправление ошибок - исправление структурных ошибок в тексте и указание на них, а также совет как их избежать в будущем\nПиши об исправленных ошибках в самом конце ответа\nОтделяй разделы с помощью эмодзи и при перечислении используй цифры."
+            prompt = (
+                f"Отредактируй этот текст ...\n\n{text}\n\n"
+                "Результатом должен стать отредактированный текст пользователя ..."
+            )
 
         return self.generate_text(prompt, nco_info)
 
     def edit_text(self, text: str, nco_info: Optional[dict] = None) -> str:
+        """
+        Упрощённая функция редактирования по умолчанию.
+        """
         return self.edit_text_with_action(text, "default", nco_info)
+
+    #  ГЕНЕРАЦИЯ КОНТЕНТ-ПЛАНА
 
     def generate_content_plan(
         self,
@@ -64,66 +146,67 @@ class TextService:
         end_date: Optional[datetime.date] = None,
         theme: Optional[str] = None
     ) -> str:
+        """
+        Генерация контент-плана по выбранному периоду и частоте.
+
+        Параметры:
+            period (str): "неделя", "месяц", "custom".
+            frequency (str): частота публикаций.
+            nco_info (dict | None): данные об НКО.
+            start_date (date | None): дата начала.
+            end_date (date | None): дата окончания (для custom).
+            theme (str | None): тема контент-плана.
+
+        Возвращает:
+            str — готовый контент-план.
+        """
+
         if start_date is None:
             start_date = datetime.now().date()
 
+        # Обработка периода
         if period == "неделя":
             end_date = start_date + timedelta(days=6)
-            days = 7
+            total_days = 7
         elif period == "месяц":
             end_date = start_date + timedelta(days=29)
-            days = 30
+            total_days = 30
         elif period == "custom":
             if end_date is None:
                 raise ValueError("Для custom периода требуется end_date")
-            days = (end_date - start_date).days + 1
+            total_days = (end_date - start_date).days + 1
         else:
             raise ValueError("Неверный период")
 
-        interval_map = {
-            "1 раз в день": 1,
-            "2 раза в неделю": 3.5,
-            "3 раза в неделю": 2.33,
-            "1 раз в неделю": 7,
-            "2 раза в месяц": 15
-        }
-        interval = interval_map.get(frequency, 7)
+        # Нормализация частоты
+        freq_lower = frequency.lower().strip()
+        freq_clean = re.sub(r"[^\w\s]", "", freq_lower)
 
-        num_posts = max(1, int(days / interval))
-        if num_posts > 30:
-            num_posts = 30
-        step = days / num_posts if num_posts > 0 else 1
-        post_dates = [start_date + timedelta(days=int(i * step)) for i in range(num_posts)]
+        if "1 раз в день" in freq_clean:
+            normalized = "1 раз в день"
+        elif "1 раз в неделю" in freq_clean:
+            normalized = "1 раз в неделю"
+        elif "2 раза в неделю" in freq_clean:
+            normalized = "2 раза в неделю"
+        elif "3 раза в неделю" in freq_clean:
+            normalized = "3 раза в неделю"
+        elif "2 раза в месяц" in freq_clean:
+            normalized = "2 раза в месяц"
+        else:
+            normalized = "1 раз в неделю"
 
-        context = ""
-        if nco_info and any(nco_info.values()):
-            context = (
-                f"Информация об НКО:\n"
-                f"* Название: {nco_info.get('name', '')}\n"
-                f"* Деятельность: {nco_info.get('activities', '')}\n"
-                f"* Аудитория: {nco_info.get('audience', '')}\n"
-                f"* Сайт: {nco_info.get('website', '')}\n\n"
-            )
+        # Расчёт количества постов
+        if normalized == "1 раз в день":
+            num_posts = total_days
+        elif normalized == "1 раз в неделю":
+            num_posts = max(1, (total_days + 6) // 7)
+        elif normalized == "2 раза в неделю":
+            num_posts = max(1, (total_days * 2 + 6) // 7)
+        elif normalized == "3 раза в неделю":
+            num_posts = max(1, (total_days * 3 + 6) // 7)
+        elif normalized == "2 раза в месяц":
+            num_posts = 2
+        else:
+            num_posts = 4
 
-        theme_hint = f"Тема: {theme}\n" if theme else ""
-        period_desc = period if period != "custom" else f"с {start_date.strftime('%d.%m.%Y')} по {end_date.strftime('%d.%m.%Y')}"
-        prompt = (
-            f"{self.system_prompt}\n\n"
-            f"{context}"
-            f"{theme_hint}"
-            f"Составь контент-план на {period_desc} с частотой «{frequency}», начиная с {start_date.strftime('%d.%m.%Y')}.\n"
-            f"Даты публикаций: {', '.join(d.strftime('%d.%m') for d in post_dates)}\n"
-            f"Для каждой даты: 1 идея поста (тип + краткое описание). Всего {num_posts} идей.\n"
-            f"Формат: [дд.мм] — Тип: Краткое описание (1-2 предложения)"
-        )
-
-        result = self.model.run(prompt)
-        return result.alternatives[0].text.strip()
-
-    def check_health(self) -> bool:
-        try:
-            result = self.model.run("Ответь одним словом: ок")
-            return "ок" in result.alternatives[0].text.lower()
-        except Exception as e:
-            print(f"Health check error: {e}")
-            return False
+        num_posts = min(num
